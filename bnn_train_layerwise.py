@@ -24,8 +24,10 @@ def main(args):
     # Load dataset
     data = load_dataset(args.dataset)
     data = data.map(lambda samples: tokenizer(samples["quote"]), batched=True)
-
-    for layer in model.base_model.decoder.layers[::-1]:
+    layers = [(f"layer{i}", _) for i, _ in enumerate(model.base_model.decoder.layers)]
+    if args.order == "reverse":
+        layers = layers[::-1]
+    for i, layer in layers:
         module_name_dict = {name: module for name, module in layer.named_modules()}
         for name, module in module_name_dict.items():
             if isinstance(module, nn.Linear):
@@ -37,7 +39,7 @@ def main(args):
                     father = module_name_dict[name[:ind]]
                 qlinear = BinaryLinear(module.weight, module.bias)
                 setattr(father, name[ind + 1 :], qlinear)
-                print(f"replace {name} with {qlinear}")
+                print(f"replace layer{i} {name} with {qlinear}")
 
         print_trainable_parameters(model)
 
@@ -81,6 +83,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--dataset", type=str, default="Abirate/english_quotes", help="Dataset name"
+    )
+    parser.add_argument(
+        "--order", type=str, default="forward", choices=["forward", "reverse"]
     )
     parser.add_argument(
         "--debug", action="store_true", help="Debug mode (only 10 steps)"
