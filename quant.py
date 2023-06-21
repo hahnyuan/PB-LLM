@@ -37,7 +37,7 @@ class IrNetBinary(torch.autograd.Function):
 
 class FdaBinary(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, inputs, n=torch.tensor(9+int(9)).cuda()):
+    def forward(ctx, inputs, n):
         ctx.save_for_backward(inputs, n)
         out = torch.sign(inputs)
         return out
@@ -108,14 +108,12 @@ class FdaBinaryLinear(nn.Module):
     def __init__(self, weight, bias) -> None:
         super().__init__()
         self.weight = nn.Parameter(weight.to(torch.float32).data)
+        self.n = torch.tensor(int(10)).cuda()
         if bias is not None:
             self.bias = nn.Parameter(bias.to(torch.float32).data)
         else:
             self.bias = None
 
-    def n_update(self, max_epochs, epoch):
-        self.n = torch.tensor(9 + int(epoch / max_epochs * 9)).to(self.n.device)
-
     def forward(self, x):
-        w = FdaBinary().apply(self.weight)
+        w = FdaBinary().apply(self.weight, self.n)
         return F.linear(x, w, self.bias)
