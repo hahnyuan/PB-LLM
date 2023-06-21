@@ -28,65 +28,65 @@ def print_trainable_parameters(model):
     )
 
 
-def main(model_id, dataset_name):
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForCausalLM.from_pretrained(model_id, device_map={"": 0})
+def main(args):
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id)
+    model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map={"": 0})
 
     # Enable gradient checkpointing and prepare model for k-bit training
     model.gradient_checkpointing_enable()
     model = prepare_model_for_kbit_training(model)
 
-    module_name_dict = {name: module for name, module in model.named_modules()}
-
-    for name, module in module_name_dict.items():
-        if isinstance(module, nn.Linear):
-            ind = name.rfind(".")
-            if ind == -1:
-                continue
-                father = module_name_dict[""]
-            else:
-                father = module_name_dict[name[:ind]]
-            qlinear = BinaryLinear(module.weight, module.bias)
-            setattr(father, name[ind + 1 :], qlinear)
-            print(f"replace {name} with {qlinear}")
-
-    print_trainable_parameters(model)
-
     # Load dataset
-    data = load_dataset(dataset_name)
+    data = load_dataset(args.dataset)
     data = data.map(lambda samples: tokenizer(samples["quote"]), batched=True)
 
-    # Set tokenizer properties
-    tokenizer.pad_token = tokenizer.eos_token
+    for layer in model.base_model.encoder.layers:
+        module_name_dict = {name: module for name, module in layer.named_modules()}
+        for name, module in module_name_dict.items():
+            if isinstance(module, nn.Linear):
+                ind = name.rfind(".")
+                if ind == -1:
+                    # continue
+                    father = module_name_dict[""]
+                else:
+                    father = module_name_dict[name[:ind]]
+                qlinear = BinaryLinear(module.weight, module.bias)
+                setattr(father, name[ind + 1 :], qlinear)
+                print(f"replace {name} with {qlinear}")
 
-    # Define training arguments
-    training_args = TrainingArguments(
-        per_device_train_batch_size=1,
-        gradient_accumulation_steps=4,
-        warmup_steps=100,
-        max_steps=10000,
-        learning_rate=1e-4,
-        fp16=True,
-        logging_steps=1,
-        output_dir="outputs",
-        optim="paged_adamw_8bit",
-        report_to="tensorboard",
-    )
+        print_trainable_parameters(model)
 
-    # Create trainer
-    trainer = Trainer(
-        model=model,
-        train_dataset=data["train"],
-        args=training_args,
-        data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
-    )
+        # Set tokenizer properties
+        tokenizer.pad_token = tokenizer.eos_token
 
-    model.config.use_cache = (
-        False  # silence the warnings. Please re-enable for inference!
-    )
+        # Define training arguments
+        training_args = TrainingArguments(
+            per_device_train_batch_size=1,
+            gradient_accumulation_steps=4,
+            warmup_steps=100,
+            max_steps=10 if args.debug else 1000,
+            learning_rate=1e-4,
+            fp16=True,
+            logging_steps=1,
+            output_dir="outputs",
+            optim="paged_adamw_8bit",
+            report_to="tensorboard",
+        )
 
-    # Train the model
-    trainer.train()
+        # Create trainer
+        trainer = Trainer(
+            model=model,
+            train_dataset=data["train"],
+            args=training_args,
+            data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+        )
+
+        model.config.use_cache = (
+            False  # silence the warnings. Please re-enable for inference!
+        )
+
+        # Train the model
+        trainer.train()
 
 
 if __name__ == "__main__":
@@ -97,6 +97,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset", type=str, default="Abirate/english_quotes", help="Dataset name"
     )
+    parser.add_argument(
+        "--debug", action="store_true", help="Debug mode (only 10 steps)"
+    )
     args = parser.parse_args()
 
-    main(args.model_id, args.dataset)
+    main(args)
