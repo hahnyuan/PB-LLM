@@ -7,7 +7,13 @@ The exponential growth of language models has posed challenges in terms of model
 
 ## Usage
 
-For test run:
+Run the script with the desired arguments:
+
+```shell
+python train_model.py --model_id <pretrained_model_id> --dataset <dataset_name> [--debug]
 ```
-python bnn_train_test.py
-```
+
+Arguments:
+- model_id: Pretrained model ID (default: "facebook/opt-350m")
+- dataset: Dataset name (default: "Abirate/english_quotes")
+- debug: Enable debug mode (optional)

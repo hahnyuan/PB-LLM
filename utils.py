@@ -39,3 +39,4 @@ def prepare_model_for_training(model):
 
     # enable gradient checkpointing for memory efficiency
     model.gradient_checkpointing_enable()
+    return model
