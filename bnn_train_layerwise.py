@@ -1,6 +1,13 @@
 import argparse
 import torch
 import torch.nn as nn
+# from transformers import (
+#     AutoModelForCausalLM,
+#     AutoTokenizer,
+#     DataCollatorForLanguageModeling,
+#     TrainingArguments,
+#     Trainer,
+# )
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -9,7 +16,7 @@ from transformers import (
     Trainer,
 )
 from datasets import load_dataset
-from quant import BinaryLinear
+from quant import BinaryLinear, IrBinaryLinear, FdaBinaryLinear, XnorBinaryLinear
 from utils import *
 
 
@@ -33,11 +40,21 @@ def main(args):
             if isinstance(module, nn.Linear):
                 ind = name.rfind(".")
                 if ind == -1:
-                    # continue
                     father = module_name_dict[""]
                 else:
                     father = module_name_dict[name[:ind]]
-                qlinear = BinaryLinear(module.weight, module.bias)
+                #choose binariztaion method
+                if args.binarization_method == 'ste':
+                    qlinear = BinaryLinear(module.weight, module.bias)
+                elif args.binarization_method == 'ir':
+                    qlinear = IrBinaryLinear(module.weight, module.bias)
+                elif args.binarization_method == 'xnor':
+                    qlinear = XnorBinaryLinear(module.weight, module.bias)
+                elif args.binarization_method == 'fda':
+                    qlinear = FdaBinaryLinear(module.weight, module.bias)
+                else:
+                    print('not support this binarization method ')
+
                 setattr(father, name[ind + 1 :], qlinear)
                 print(f"replace layer{i} {name} with {qlinear}")
 
@@ -56,12 +73,19 @@ def main(args):
             fp16=True,
             logging_steps=1,
             output_dir="outputs",
-            optim="paged_adamw_8bit",
+            optim="adamw_torch",
             report_to="tensorboard",
         )
 
         # Create trainer
         trainer = Trainer(
+            model=model,
+            train_dataset=data["train"],
+            args=training_args,
+            data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+        )
+
+        trainer_w_distiller = Trainer(
             model=model,
             train_dataset=data["train"],
             args=training_args,
@@ -86,6 +110,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--order", type=str, default="forward", choices=["forward", "reverse"]
+    )
+    parser.add_argument(
+        "--binarization_method", type=str, default="ste", choices=["ste", "ir", "fda", 'xnor']
     )
     parser.add_argument(
         "--debug", action="store_true", help="Debug mode (only 10 steps)"
