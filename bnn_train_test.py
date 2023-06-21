@@ -1,7 +1,6 @@
-# %%
 from transformers import AutoModelForCausalLM
 
-# %%
+
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
@@ -19,14 +18,13 @@ tokenizer = AutoTokenizer.from_pretrained(model_id)
 # )
 model = AutoModelForCausalLM.from_pretrained(model_id, device_map={"": 0})
 
-# %%
+
 from peft import prepare_model_for_kbit_training
 
 model.gradient_checkpointing_enable()
 model = prepare_model_for_kbit_training(model)
 
 
-# %%
 def print_trainable_parameters(model):
     """
     Prints the number of trainable parameters in the model.
@@ -42,7 +40,6 @@ def print_trainable_parameters(model):
     )
 
 
-# %%
 from peft import LoraConfig, get_peft_model
 
 # config = LoraConfig(
@@ -76,7 +73,7 @@ for name, module in module_name_dict.items():
 
 print_trainable_parameters(model)
 
-# %%
+
 from datasets import load_dataset
 import os
 
@@ -84,7 +81,6 @@ import os
 data = load_dataset("Abirate/english_quotes")
 data = data.map(lambda samples: tokenizer(samples["quote"]), batched=True)
 
-# %%
 import transformers
 
 # needed for gpt-neo-x tokenizer
@@ -96,9 +92,9 @@ trainer = transformers.Trainer(
     args=transformers.TrainingArguments(
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,
-        warmup_steps=2,
-        max_steps=10,
-        learning_rate=2e-4,
+        warmup_steps=100,
+        max_steps=10000,
+        learning_rate=5e-4,
         fp16=True,
         logging_steps=1,
         output_dir="outputs",
@@ -108,10 +104,3 @@ trainer = transformers.Trainer(
 )
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
 trainer.train()
-
-# %%
-import wandb
-
-wandb.__version__
-
-# %%

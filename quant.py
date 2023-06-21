@@ -26,9 +26,9 @@ class STEBinary(torch.autograd.Function):
 class BinaryLinear(nn.Module):
     def __init__(self, weight, bias) -> None:
         super().__init__()
-        self.weight = nn.Parameter(weight.to(torch.float16).data)
+        self.weight = nn.Parameter(weight.to(torch.float32).data)
         if bias is not None:
-            self.bias = nn.Parameter(bias.to(torch.float16).data)
+            self.bias = nn.Parameter(bias.to(torch.float32).data)
         else:
             self.bias = None
 
