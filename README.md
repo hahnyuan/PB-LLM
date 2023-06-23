@@ -7,6 +7,13 @@ The exponential growth of language models has posed challenges in terms of model
 
 ## Usage
 
+### Editable transformers (v4.29.0) package installation 
+
+```shell
+cd transformers    
+pip install -e .
+```
+
 Run the script with the desired arguments:
 
 ```shell
