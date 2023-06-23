@@ -24,3 +24,9 @@ Arguments:
 - model_id: Pretrained model ID (default: "facebook/opt-350m")
 - dataset: Dataset name (default: "Abirate/english_quotes")
 - debug: Enable debug mode (optional)
+
+Example: binarizing via Xnor algorithm with the guidance of KD.
+
+```shell
+CUDA_VISIBLE_DEVICES=5 python bnn_train_layerwise_w_KD.py --binarization_method='xnor' 
+```
