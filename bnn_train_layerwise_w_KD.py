@@ -115,14 +115,12 @@ def main(args):
                     labels = None
                 outputs = model(**inputs)
                 outputs_teacher = teacher_model(**inputs)
-                # for i, _ in enumerate(outputs):
-                #     print(i)
-                #     print(outputs[i].shape, outputs_teacher[i].shape)
+                # TODO: feature-based DK
                 # kd_loss = self.kl_loss(outputs[1],outputs_teacher[1])
                 kd_loss = F.mse_loss(outputs[1],outputs_teacher[1])
                 # print(kd_loss)
+
                 # Save past state if it exists
-                # TODO: this needs to be fixed and made cleaner later.
                 if self.args.past_index >= 0:
                     self._past = outputs[self.args.past_index]
 
