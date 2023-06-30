@@ -9,7 +9,7 @@ from lm_eval import evaluator
 class EvalLM(BaseLM):
     def __init__(
         self,
-        lm,
+        model,
         tokenizer,
         device='cuda',
         batch_size=1,
@@ -21,10 +21,8 @@ class EvalLM(BaseLM):
 
         self._device = torch.device(device)
 
-        # TODO: update this to be less of a hack once subfolder is fixed in HF
-
-        self.gpt2 = lm.to(self.device)
-        self.gpt2.eval()
+        self.model = model.to(self.device)
+        self.model.eval()
 
         self.tokenizer = tokenizer
 
@@ -41,10 +39,10 @@ class EvalLM(BaseLM):
     @property
     def max_length(self):
         try:
-            return self.gpt2.config.n_ctx
+            return self.model.config.n_ctx
         except AttributeError:
             # gptneoconfig doesn't have n_ctx apparently
-            return self.gpt2.config.max_position_embeddings
+            return self.model.config.max_position_embeddings
 
     @property
     def max_gen_toks(self):
@@ -75,10 +73,10 @@ class EvalLM(BaseLM):
         logits returned from the model
         """
         with torch.no_grad():
-            return self.gpt2(inps)[0][:, :, :50257]
+            return self.model(inps)[0][:, :, :50257]
 
     def _model_generate(self, context, max_length, eos_token_id):
-        return self.gpt2.generate(
+        return self.model.generate(
             context, max_length=max_length, eos_token_id=eos_token_id, do_sample=False
         )
 
@@ -93,6 +91,7 @@ def evaluate_model(
     num_fewshot=0,
     cache_dir="./data/",
     limit=-1,
+    batch_size=1,
 ):
     """
     model: model name
@@ -100,7 +99,7 @@ def evaluate_model(
     tasks: str tasks are split by ,
     num_fewshot: Number of examples in few-shot context
     """
-    lm=EvalLM(model,tokenizer)
+    lm=EvalLM(model,tokenizer,batch_size=batch_size)
     results = {}
     if eval_ppl:
         for dataset in ["wikitext2", "ptb", "c4"]:

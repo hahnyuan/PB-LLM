@@ -72,9 +72,9 @@ def main(model_id, dataset_name):
     )
 
     # Train the model
-    # trainer.train()
+    trainer.train()
     model.eval()
-    evaluate_model(model,tokenizer, args.model_id, args.tasks,limit=args.eval_limit)
+    evaluate_model(model,tokenizer, args.model_id, args.tasks,limit=args.eval_limit,batch_size=args.eval_batch_size)
 
 
 if __name__ == "__main__":
@@ -89,13 +89,19 @@ if __name__ == "__main__":
         "--tasks",
         type=str,
         default="",
-        help="evaluate tasks name, can be tasks lambada_openai,piqa,arc_easy,arc_challenge,openbookqa,boolq",
+        help="evaluate tasks name, can be tasks separated by , lambada_openai,piqa,arc_easy,arc_challenge,openbookqa,boolq",
     )
     parser.add_argument(
         "--eval_limit",
         default=-1,
         type=int,
         help="number of test samples for debug, set to -1 is no limit",
+    )
+    parser.add_argument(
+        "--eval_batch_size",
+        default=2,
+        type=int,
+        help="eval batch size, default is 2",
     )
     args = parser.parse_args()
 
