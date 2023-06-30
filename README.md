@@ -7,6 +7,12 @@ The exponential growth of language models has posed challenges in terms of model
 
 ## Usage
 
+### Install requirements
+
+```shell
+pip install lm_eval
+```
+
 ### Editable transformers (v4.29.0) package installation 
 
 ```shell

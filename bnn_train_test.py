@@ -11,6 +11,7 @@ from transformers import (
 from datasets import load_dataset
 from quant import BinaryLinear
 from utils import *
+from evaluate import evaluate_model
 
 
 def main(model_id, dataset_name):
@@ -48,8 +49,8 @@ def main(model_id, dataset_name):
     training_args = TrainingArguments(
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,
-        warmup_steps=100,
-        max_steps=10000,
+        warmup_steps=1,
+        max_steps=2,
         learning_rate=1e-4,
         fp16=True,
         logging_steps=1,
@@ -71,7 +72,9 @@ def main(model_id, dataset_name):
     )
 
     # Train the model
-    trainer.train()
+    # trainer.train()
+    model.eval()
+    evaluate_model(model,tokenizer, args.model_id, args.tasks,limit=args.eval_limit)
 
 
 if __name__ == "__main__":
@@ -81,6 +84,18 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--dataset", type=str, default="Abirate/english_quotes", help="Dataset name"
+    )
+    parser.add_argument(
+        "--tasks",
+        type=str,
+        default="",
+        help="evaluate tasks name, can be tasks lambada_openai,piqa,arc_easy,arc_challenge,openbookqa,boolq",
+    )
+    parser.add_argument(
+        "--eval_limit",
+        default=-1,
+        type=int,
+        help="number of test samples for debug, set to -1 is no limit",
     )
     args = parser.parse_args()
 
