@@ -206,6 +206,7 @@ def main(args):
 
         # Train the model
         trainer.train()
+    trainer.save_model(output_dir=args.model_save_dir)
 
 
 if __name__ == "__main__":
@@ -224,6 +225,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--debug", action="store_true", help="Debug mode (only 10 steps)"
+    )
+    parser.add_argument(
+        "--model_save_dir", type=str, default="./checkpoints/feature_kd", help="saving model to this directory"
     )
     args = parser.parse_args()
 
