@@ -199,5 +199,5 @@ def evaluate_model(
         print(results)
     with open("outputs/evaluate_result.log", "a+") as f:
         date_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        f.write(f"{date_time} {model_name} {results}\n\n")
+        f.write(f"{date_time} {model_name}\n {results}\n\n")
     return results
