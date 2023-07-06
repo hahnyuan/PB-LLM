@@ -1,6 +1,7 @@
 import argparse
 import torch
 import torch.nn as nn
+import os
 # from transformers import (
 #     AutoModelForCausalLM,
 #     AutoTokenizer,
@@ -40,9 +41,9 @@ def main(args):
     # sample = data['train'][0]
     # print(sample.keys())
     # Slice first 1000 samples
-    data = data['train'].select(range(1500))
+    # data = data['train'].select(range(1500))
     print('prepare training data')
-    train_data = data.map(lambda samples: tokenizer(samples["text"], truncation=True, max_length=128), batched=True, batch_size=10, num_proc=10)
+    data = data.map(lambda samples: tokenizer(samples["text"], truncation=True, max_length=128), batched=True, batch_size=1000, num_proc=os.cpu_count())
     for name, _ in model.named_modules():
         print(name)
     layers = [(f"layer{i}", _) for i, _ in enumerate(model.base_model.layers)]
@@ -89,12 +90,13 @@ def main(args):
             output_dir="outputs",
             optim="adamw_torch",
             report_to="tensorboard",
+            logging_dir='./outputs/runs/logging/',
         )
 
         # Create trainer
         trainer = Trainer(
             model=model,
-            train_dataset=train_data,
+            train_dataset=data['train'],
             args=training_args,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
         )
