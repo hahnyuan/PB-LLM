@@ -1,6 +1,10 @@
 import torch
 import torch.nn as nn
+import torch.cuda
 
+def print_memory_usage():
+    mem = torch.cuda.memory_allocated()
+    print(f"memory_allocated: {mem / 1024 / 1024} MB")
 
 def print_trainable_parameters(model):
     """

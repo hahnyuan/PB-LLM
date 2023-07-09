@@ -19,6 +19,10 @@ from datasets import load_dataset
 from quant import BinaryLinear, IrBinaryLinear, FdaBinaryLinear, XnorBinaryLinear
 from utils import *
 
+"""
+Usage
+python bnn_train_layerwise.py --binarization_method ir --debug
+"""
 
 def main(args):
     tokenizer = AutoTokenizer.from_pretrained(args.model_id)
@@ -68,7 +72,7 @@ def main(args):
             per_device_train_batch_size=1,
             gradient_accumulation_steps=4,
             warmup_steps=100,
-            max_steps=10 if args.debug else 1000,
+            max_steps=10 if args.debug else 100,
             learning_rate=1e-4,
             fp16=True,
             logging_steps=1,
@@ -98,6 +102,7 @@ def main(args):
 
         # Train the model
         trainer.train()
+        print_memory_usage()
     trainer.save_model(output_dir=args.model_save_dir)
 
 

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from torch.utils.checkpoint import checkpoint
 
 class STERoundClamp(torch.autograd.Function):
     @staticmethod
@@ -74,13 +75,17 @@ class XnorBinaryLinear(nn.Module):
         else:
             self.bias = None
 
-    def forward(self, x):
+    def quant_weight(self):
         w = self.weight
         #centeralization
         w = w - w.mean(-1).view(-1, 1)
         scaling_factor = w.abs().mean(-1).view(-1, 1).detach()
         w = STEBinary().apply(w)
         w = w * scaling_factor
+        return w
+
+    def forward(self, x):
+        w=checkpoint(self.quant_weight)
         return F.linear(x, w, self.bias)
 
 class IrBinaryLinear(nn.Module):
@@ -92,16 +97,18 @@ class IrBinaryLinear(nn.Module):
         else:
             self.bias = None
 
-    # def forward(self, x):
-    #     w = IrNetBinary().apply(self.weight)
-    #     return F.linear(x, w, self.bias)
-    def forward(self, x):
+    def quant_weight(self):
         w = self.weight
         #centeralization
         w = w - w.mean(-1).view(-1, 1)
         scaling_factor = w.abs().mean(-1).view(-1, 1).detach()
         w = IrNetBinary().apply(w)
         w = w * scaling_factor
+        return w
+
+
+    def forward(self, x):
+        w=checkpoint(self.quant_weight)
         return F.linear(x, w, self.bias)
 
 class FdaBinaryLinear(nn.Module):
@@ -114,6 +121,10 @@ class FdaBinaryLinear(nn.Module):
         else:
             self.bias = None
 
-    def forward(self, x):
+    def quant_weight(self):
         w = FdaBinary().apply(self.weight, self.n)
+        return w
+
+    def forward(self, x):
+        w=checkpoint(self.quant_weight)
         return F.linear(x, w, self.bias)
