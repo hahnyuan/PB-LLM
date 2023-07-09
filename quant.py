@@ -85,7 +85,7 @@ class XnorBinaryLinear(nn.Module):
         return w
 
     def forward(self, x):
-        w=checkpoint(self.quant_weight)
+        w=checkpoint(self.quant_weight, use_reentrant=False)
         return F.linear(x, w, self.bias)
 
 class IrBinaryLinear(nn.Module):
@@ -108,7 +108,7 @@ class IrBinaryLinear(nn.Module):
 
 
     def forward(self, x):
-        w=checkpoint(self.quant_weight)
+        w=checkpoint(self.quant_weight, use_reentrant=False)
         return F.linear(x, w, self.bias)
 
 class FdaBinaryLinear(nn.Module):
@@ -126,5 +126,5 @@ class FdaBinaryLinear(nn.Module):
         return w
 
     def forward(self, x):
-        w=checkpoint(self.quant_weight)
+        w=checkpoint(self.quant_weight, use_reentrant=False)
         return F.linear(x, w, self.bias)
