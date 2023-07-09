@@ -1,7 +1,7 @@
 import argparse
+import os
 import torch
 import torch.nn as nn
-import os
 # from transformers import (
 #     AutoModelForCausalLM,
 #     AutoTokenizer,
@@ -15,37 +15,43 @@ from transformers import (
     DataCollatorForLanguageModeling,
     TrainingArguments,
     Trainer,
+    LlamaTokenizer,
+    LlamaForCausalLM,
 )
+# from transformers import LlamaTokenizer, LlamaForCausalLM
 from datasets import load_dataset
 from quant import BinaryLinear, IrBinaryLinear, FdaBinaryLinear, XnorBinaryLinear
 from utils import *
 
+"""
+Usage
+python bnn_train_layerwise.py --binarization_method xnor --debug
+"""
 
 def main(args):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_id)
-    model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map='auto')
-
-    # Enable gradient checkpointing and prepare model for k-bit training
-    model.gradient_checkpointing_enable()
-    model = prepare_model_for_training(model)
-
+    tokenizer = LlamaTokenizer.from_pretrained(args.model_id)
+    model = LlamaForCausalLM.from_pretrained(
+        args.model_id, torch_dtype=torch.float16, device_map='auto',
+    )
+    # generate a sample
     prompt = "Hey, are you conscious? Can you talk to me?"
     inputs = tokenizer(prompt, return_tensors="pt")
-
-    generate_ids = model.generate(inputs.input_ids, max_length=50)
+    generate_ids = model.generate(inputs.input_ids, max_length=100)
     outputs = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-    # print(outputs)
+    print(outputs)
+
+    # Enable gradient checkpointing and prepare model for k-bit training
+    # model.gradient_checkpointing_enable()
+    model = prepare_model_for_training(model)
 
     # Load dataset
     data = load_dataset(args.dataset)
-    # sample = data['train'][0]
-    # print(sample.keys())
-    # Slice first 1000 samples
-    # data = data['train'].select(range(1500))
     print('prepare training data')
-    data = data.map(lambda samples: tokenizer(samples["text"], truncation=True, max_length=512), batched=True, batch_size=100, writer_batch_size=5000, num_proc=os.cpu_count())
-    for name, _ in model.named_modules():
-        print(name)
+    data = data.map(lambda samples: tokenizer(samples["text"], truncation=True, max_length=512), batched=True,
+                    batch_size=100, writer_batch_size=100, num_proc=os.cpu_count())
+    print(data.shape)
+    # for name, _ in model.named_modules():
+    #     print(name)
     layers = [(f"layer{i}", _) for i, _ in enumerate(model.base_model.layers)]
     if args.order == "reverse":
         layers = layers[::-1]
@@ -88,25 +94,24 @@ def main(args):
             fp16=True,
             logging_steps=1,
             output_dir="outputs",
-            optim="adamw_hf",
+            optim="adamw_torch",
             report_to="tensorboard",
-            logging_dir='./outputs/runs/logging/',
         )
+
+        # for name, param in model.named_parameters():
+        #     if param.requires_grad:
+        #         print(name, "requires grad")
+        #     else:
+        #         print(name, "does not require grad")
 
         # Create trainer
         trainer = Trainer(
             model=model,
-            train_dataset=data['train'],
+            train_dataset=data["train"],
             args=training_args,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
         )
 
-        # trainer_w_distiller = Trainer(
-        #     model=model,
-        #     train_dataset=data["train"],
-        #     args=training_args,
-        #     data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
-        # )
 
         model.config.use_cache = (
             False  # silence the warnings. Please re-enable for inference!
@@ -114,30 +119,39 @@ def main(args):
 
         # Train the model
         trainer.train()
-    generate_ids = model.generate(inputs.input_ids, max_length=50)
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                print(name, "requires grad, and set to not required")
+                param.requires_grad = False
+            else:
+                print(name, "does not require grad")
+        print_memory_usage()
+    generate_ids = model.generate(inputs.input_ids, max_length=100)
     binarized_output = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
     print(binarized_output)
-    print('saving binarized model')
-    trainer.save_model(output_dir='./checkpoints/lamma7b-xnor')
+    trainer.save_model(output_dir=args.model_save_dir)
 
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Model Training Script")
     parser.add_argument(
-        "--model_id", type=str, default="huggyllama/llama-7b", help="Pretrained model ID"
+        "--model_id", type=str, default="openlm-research/open_llama_7b", help="Pretrained model ID"
     )
     parser.add_argument(
-        "--dataset", type=str, default='togethercomputer/RedPajama-Data-1T-Sample', help="Dataset name"
+        "--dataset", type=str, default="Abirate/english_quotes", help="Dataset name"
     )
     parser.add_argument(
-        "--order", type=str, default="reverse", choices=["forward", "reverse"]
+        "--order", type=str, default="forward", choices=["forward", "reverse"]
     )
     parser.add_argument(
         "--binarization_method", type=str, default="ste", choices=["ste", "ir", "fda", 'xnor']
     )
     parser.add_argument(
         "--debug", action="store_true", help="Debug mode (only 10 steps)"
+    )
+    parser.add_argument(
+        "--model_save_dir", type=str, default="./checkpoints", help="saving model to this directory"
     )
     args = parser.parse_args()
 
