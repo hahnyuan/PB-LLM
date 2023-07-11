@@ -105,7 +105,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
                 # print(name, "does not require grad")
         
         print_memory_usage()
-        save_bnn(model, args.model_save_dir+f'/{module_name}')
+        save_bnn(model, args.model_save_dir+f'/{args.granularity}/{module_name}')
         # trainer.save_model(output_dir=args.model_save_dir+f'/layer{i}')
         # bnn_meta=get_bnn_meta(model)
         # torch.save(bnn_meta,args.model_save_dir+f'/layer{i}/bnn_meta.pt')
@@ -134,22 +134,15 @@ def main(args):
         data = get_redpajama_train(tokenizer, args.data_percent)
     else:
         raise NotImplementedError
-        data = load_dataset(args.dataset)
-
-        data = data.map(
-            lambda samples: tokenizer(samples["text"], truncation=True, max_length=512),
-            batched=True,
-            batch_size=100,
-            writer_batch_size=100,
-            num_proc=os.cpu_count(),
-        )
-        print(data.shape)
-    # for name, _ in model.named_modules():
-    #     print(name)
     if args.granularity == "per_block":
         ordered_name_modules = [(f"block{i}", _) for i, _ in enumerate(model.base_model.layers)]
         if args.order == "reverse":
             ordered_name_modules = ordered_name_modules[::-1]
+    elif args.granularity == "per_linear":
+        ordered_name_modules = []
+        for name,module in model.named_modules():
+            if isinstance(module, nn.Linear):
+                ordered_name_modules.append((name,module))
     else:
         raise NotImplementedError
     iterative_train(model,ordered_name_modules, data, tokenizer)
