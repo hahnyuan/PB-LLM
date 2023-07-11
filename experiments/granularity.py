@@ -26,7 +26,7 @@ from transformers import (
 # from transformers import LlamaTokenizer, LlamaForCausalLM
 from datasets import load_dataset
 from quant import BinaryLinear, IrBinaryLinear, FdaBinaryLinear, XnorBinaryLinear
-from utils import print_trainable_parameters,print_memory_usage,prepare_model_for_training,get_bnn_meta
+from utils import print_trainable_parameters,print_memory_usage,prepare_model_for_training,save_bnn
 
 """
 Usage
@@ -34,8 +34,8 @@ python bnn_train_layerwise.py --binarization_method xnor --debug
 """
 
 
-def replace_qlinear(layer, name_prefix=""):
-    module_name_dict = {name: module for name, module in layer.named_modules()}
+def replace_qlinear(root_module, name_prefix=""):
+    module_name_dict = {name: module for name, module in root_module.named_modules()}
     for name, module in module_name_dict.items():
         if isinstance(module, nn.Linear):
             ind = name.rfind(".")
@@ -59,21 +59,22 @@ def replace_qlinear(layer, name_prefix=""):
             print(f"replace layer {name_prefix}{name} with {qlinear}")
 
 
-def per_linear_train(model, data, tokenizer):
-    layers = [(f"layer{i}", _) for i, _ in enumerate(model.base_model.layers)]
-    if args.order == "reverse":
-        layers = layers[::-1]
+def iterative_train(model, ordered_name_modules, data, tokenizer):
+    """
+    ordered_name_modules: [(name, module), ...]
+    """
+    
 
-    for i, layer in layers:
+    for module_name, module in ordered_name_modules:
         print_trainable_parameters(model)
-        replace_qlinear(layer, f"{i}.")
+        replace_qlinear(module, f"{module_name}.")
 
         # Define training arguments
         training_args = TrainingArguments(
             per_device_train_batch_size=1,
             gradient_accumulation_steps=4,
             warmup_steps=100,
-            max_steps=10 if args.debug else 200,
+            max_steps=2 if args.debug else 200,
             learning_rate=1e-4,
             fp16=False,
             logging_steps=1,
@@ -102,11 +103,12 @@ def per_linear_train(model, data, tokenizer):
                 param.requires_grad = False
             # else:
                 # print(name, "does not require grad")
-
+        
         print_memory_usage()
-        trainer.save_model(output_dir=args.model_save_dir+f'/layer{i}')
-        bnn_meta=get_bnn_meta(model)
-        torch.save(bnn_meta,args.model_save_dir+f'/layer{i}/bnn_meta.pt')
+        save_bnn(model, args.model_save_dir+f'/{module_name}')
+        # trainer.save_model(output_dir=args.model_save_dir+f'/layer{i}')
+        # bnn_meta=get_bnn_meta(model)
+        # torch.save(bnn_meta,args.model_save_dir+f'/layer{i}/bnn_meta.pt')
 
 
 
@@ -144,8 +146,13 @@ def main(args):
         print(data.shape)
     # for name, _ in model.named_modules():
     #     print(name)
-
-    per_linear_train(model, data, tokenizer)
+    if args.granularity == "per_block":
+        ordered_name_modules = [(f"block{i}", _) for i, _ in enumerate(model.base_model.layers)]
+        if args.order == "reverse":
+            ordered_name_modules = ordered_name_modules[::-1]
+    else:
+        raise NotImplementedError
+    iterative_train(model,ordered_name_modules, data, tokenizer)
 
 
 if __name__ == "__main__":

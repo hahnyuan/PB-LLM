@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.cuda
 import quant
+import json
+import os
 
 def print_memory_usage():
     mem = torch.cuda.memory_allocated()
@@ -46,25 +48,10 @@ def prepare_model_for_training(model):
     model.gradient_checkpointing_enable()
     return model
 
-def prepare_model_for_eval(model,bnn_meta=None):
+def prepare_model_for_eval(model):
     model.eval()
 
-    module_name_dict = {name: module for name, module in model.named_modules()}
-    if bnn_meta is not None:
-        for name, module in module_name_dict.items():
-            if isinstance(module, nn.Linear):
-                ind = name.rfind(".")
-                if ind == -1:
-                    father = module_name_dict[""]
-                else:
-                    father = module_name_dict[name[:ind]]
-                #choose binariztaion method
-                if name in bnn_meta:
-                    binarization_method=bnn_meta[name]
-                    qlinear=getattr(quant,binarization_method)(module.weight, module.bias)
-
-                    setattr(father, name[ind + 1 :], qlinear)
-                    print(f"replace layer {name} with {qlinear}")
+    
 
     for name, param in model.named_parameters():
         # freeze base model's layers
@@ -80,3 +67,44 @@ def get_bnn_meta(model):
         if isinstance(module,quant.BinaryInterface):
             meta[name] = module.__class__.__name__
     return meta
+
+def get_bnn_weights(model):
+    weights={}
+    for name,module in model.named_modules():
+        if isinstance(module,quant.BinaryInterface):
+            weights[name] = module.weight.data.half().cpu()
+            weights[name+"_bias"] = module.bias
+    return weights
+
+def save_bnn(model,save_path):
+    print(f"saving bnn model to {save_path}")
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    meta=get_bnn_meta(model)
+    weights=get_bnn_weights(model)
+    json.dump(meta,open(save_path+"/meta.json","w"))
+    torch.save(weights,save_path+"/weights.pth")
+
+def load_bnn(model,load_path):
+    print(f"loading bnn model from {load_path}")
+    bnn_meta=json.load(open(load_path+"/meta.json","r"))
+    bnn_weights=torch.load(load_path+"/weights.pth")
+
+    module_name_dict = {name: module for name, module in model.named_modules()}
+    for name, module in module_name_dict.items():
+        if isinstance(module, nn.Linear):
+            ind = name.rfind(".")
+            if ind == -1:
+                father = module_name_dict[""]
+            else:
+                father = module_name_dict[name[:ind]]
+            #choose binariztaion method
+            if name in bnn_meta:
+                binarization_method=bnn_meta[name]
+                weight=bnn_weights[name]
+                bias=bnn_weights[name+"_bias"]
+                qlinear=getattr(quant,binarization_method)(weight,bias)
+
+                setattr(father, name[ind + 1 :], qlinear)
+                print(f"replace layer {name} with {qlinear}")
+    return model

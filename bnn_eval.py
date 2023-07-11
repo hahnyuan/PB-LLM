@@ -23,7 +23,7 @@ from transformers import (
     AutoConfig,
 )
 import quant
-from utils import prepare_model_for_eval
+from utils import prepare_model_for_eval,load_bnn
 import torch.nn.functional as F
 from evaluate import evaluate_model
 
@@ -33,16 +33,19 @@ def main(model_id, dataset_name):
     if args.load_checkpoint:
         print('loading quantized checkpoint!!!')
         tokenizer = LlamaTokenizer.from_pretrained(args.model_id)
-        model = LlamaForCausalLM.from_pretrained(
-            args.checkpoint_dir, torch_dtype=torch.float32, device_map='auto',
-        )
-        bnn_meta_path=os.path.join(args.checkpoint_dir,'bnn_meta.pt')
+        
+        bnn_meta_path=os.path.join(args.checkpoint_dir,'meta.json')
         if os.path.exists(bnn_meta_path):
-            bnn_meta=torch.load(bnn_meta_path)
+            model = LlamaForCausalLM.from_pretrained(
+                args.model_id, torch_dtype=torch.float16, device_map='auto',
+            )
+            load_bnn(model,args.checkpoint_dir)
         else:
-            bnn_meta=None
+            model = LlamaForCausalLM.from_pretrained(
+                args.checkpoint_dir, torch_dtype=torch.float16, device_map='auto',
+            )
             
-        model=prepare_model_for_eval(model,bnn_meta=bnn_meta)
+        model=prepare_model_for_eval(model)
         evaluate_model(model, tokenizer, args.model_id, args.tasks, limit=args.eval_limit, batch_size=args.eval_batch_size, num_fewshot=5)
 
     else:
