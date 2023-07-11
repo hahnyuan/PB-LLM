@@ -30,20 +30,14 @@ from evaluate import evaluate_model
 
 def main(model_id, dataset_name):
 
-    # tokenizer = AutoTokenizer.from_pretrained(args.model_id)
-
-    # # Load dataset
-    # data = load_dataset(args.dataset)
-    # data = data.map(lambda samples: tokenizer(samples["quote"]), batched=True)
-
-    # model_fp16 = AutoModelForCausalLM.from_pretrained('facebook/opt-6.7b', device_map='auto')
     if args.load_checkpoint:
+        print('loading quantized checkpoint!!!')
         tokenizer = LlamaTokenizer.from_pretrained(args.model_id)
         model = LlamaForCausalLM.from_pretrained(
             args.checkpoint_dir, torch_dtype=torch.float16, device_map='auto',
         )
         model.eval()
-        evaluate_model(model, tokenizer, args.model_id, args.tasks, limit=args.eval_limit, batch_size=args.eval_batch_size, num_fewshot=5)
+        evaluate_model(model, tokenizer, args.model_id, args.tasks, limit=args.eval_limit, batch_size=args.eval_batch_size, num_fewshot=args.eval_num_fewshot)
 
     else:
         print('not loading checkpoint!!!')
@@ -51,7 +45,7 @@ def main(model_id, dataset_name):
         tokenizer = AutoTokenizer.from_pretrained(args.model_id)
         model = AutoModelForCausalLM.from_pretrained(args.model_id, torch_dtype=torch.float16,  device_map={"": 0})
         model.eval()
-        evaluate_model(model, tokenizer, args.model_id, args.tasks, limit=args.eval_limit, batch_size=args.eval_batch_size, num_fewshot=5)
+        evaluate_model(model, tokenizer, args.model_id, args.tasks, limit=args.eval_limit, batch_size=args.eval_batch_size, num_fewshot=args.eval_num_fewshot)
 
 if __name__ == "__main__":
 
@@ -76,9 +70,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--eval_batch_size",
-        default=1,
+        default=2,
         type=int,
         help="eval batch size, default is 2",
+    )
+    parser.add_argument(
+        "--eval_num_fewshot",
+        default=5,
+        type=int,
+        help="mmlu eval number of few-shot, default is 5",
     )
     parser.add_argument(
         "--load_checkpoint",
@@ -91,4 +91,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.model_id, args.dataset)
-
