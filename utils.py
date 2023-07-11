@@ -50,20 +50,21 @@ def prepare_model_for_eval(model,bnn_meta=None):
     model.eval()
 
     module_name_dict = {name: module for name, module in model.named_modules()}
-    for name, module in module_name_dict.items():
-        if isinstance(module, nn.Linear):
-            ind = name.rfind(".")
-            if ind == -1:
-                father = module_name_dict[""]
-            else:
-                father = module_name_dict[name[:ind]]
-            #choose binariztaion method
-            if name in bnn_meta:
-                binarization_method=bnn_meta[name]
-                qlinear=getattr(quant,binarization_method)(module.weight, module.bias)
+    if bnn_meta is not None:
+        for name, module in module_name_dict.items():
+            if isinstance(module, nn.Linear):
+                ind = name.rfind(".")
+                if ind == -1:
+                    father = module_name_dict[""]
+                else:
+                    father = module_name_dict[name[:ind]]
+                #choose binariztaion method
+                if name in bnn_meta:
+                    binarization_method=bnn_meta[name]
+                    qlinear=getattr(quant,binarization_method)(module.weight, module.bias)
 
-                setattr(father, name[ind + 1 :], qlinear)
-                print(f"replace layer {name} with {qlinear}")
+                    setattr(father, name[ind + 1 :], qlinear)
+                    print(f"replace layer {name} with {qlinear}")
 
     for name, param in model.named_parameters():
         # freeze base model's layers

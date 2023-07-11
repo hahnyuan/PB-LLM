@@ -75,7 +75,7 @@ def per_linear_train(model, data, tokenizer):
             warmup_steps=100,
             max_steps=10 if args.debug else 200,
             learning_rate=1e-4,
-            fp16=True,
+            fp16=False,
             logging_steps=1,
             output_dir="outputs",
             optim="adamw_torch",
@@ -155,6 +155,9 @@ if __name__ == "__main__":
         type=str,
         default="huggyllama/llama-7b",
         help="Pretrained model ID",
+    )
+    parser.add_argument(
+        "--granularity", type=str, default="per_block", choices=["per_block","per_linear"]
     )
     parser.add_argument(
         "--dataset", type=str, default="red_pajama", help="Dataset name"
