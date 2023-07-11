@@ -25,6 +25,7 @@ datasets
 data
 lm_cache
 outputs
+checkpoints
 
 cuda/build
 *.so

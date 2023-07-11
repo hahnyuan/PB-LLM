@@ -1,12 +1,36 @@
-import pdb
-
+import os
 import numpy as np
 import torch
+from datasets import load_dataset
+
+"""
+doc https://huggingface.co/docs/datasets/loading
+doc https://huggingface.co/docs/datasets/process
+"""
 
 
 def set_seed(seed):
     np.random.seed(seed)
     torch.random.manual_seed(seed)
+
+
+def get_redpajama_train(tokenizer, percent=10, seed=3, batch_size=128):
+    def tokenization(example):
+        return tokenizer(example["text"], truncation=True, max_length=512)
+    
+    if percent != 100:
+        split=f'train[:{int(850000*percent/100)}]'
+    else:
+        split='train'
+    dataset = load_dataset(
+        "togethercomputer/RedPajama-Data-1T-Sample",
+        split=split
+    )
+
+    processed_dataset = dataset.map(
+        tokenization, batched=True, batch_size=batch_size, num_proc=os.cpu_count()
+    )
+    return processed_dataset
 
 
 def get_wikitext2(nsamples, seed, seqlen, model, cache_dir):

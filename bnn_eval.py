@@ -1,5 +1,6 @@
 import argparse
 import copy
+import os
 
 import torch
 import torch.nn as nn
@@ -21,9 +22,8 @@ from transformers import (
     pipeline,
     AutoConfig,
 )
-from datasets import load_dataset
-from quant import BinaryLinear, IrBinaryLinear, FdaBinaryLinear, XnorBinaryLinear
-from utils import *
+import quant
+from utils import prepare_model_for_eval
 import torch.nn.functional as F
 from evaluate import evaluate_model
 
@@ -40,9 +40,15 @@ def main(model_id, dataset_name):
     if args.load_checkpoint:
         tokenizer = LlamaTokenizer.from_pretrained(args.model_id)
         model = LlamaForCausalLM.from_pretrained(
-            args.checkpoint_dir, torch_dtype=torch.float16, device_map='auto',
+            args.checkpoint_dir, torch_dtype=torch.float32, device_map='auto',
         )
-        model.eval()
+        bnn_meta_path=os.path.join(args.checkpoint_dir,'bnn_meta.pt')
+        if os.path.exists(bnn_meta_path):
+            bnn_meta=torch.load(bnn_meta_path)
+        else:
+            bnn_meta=None
+            
+        model=prepare_model_for_eval(model,bnn_meta=bnn_meta)
         evaluate_model(model, tokenizer, args.model_id, args.tasks, limit=args.eval_limit, batch_size=args.eval_batch_size, num_fewshot=5)
 
     else:

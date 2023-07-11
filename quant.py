@@ -52,8 +52,10 @@ class FdaBinary(torch.autograd.Function):
         grad_input[inputs.lt(-1)] = 0
         return grad_input, None
 
+class BinaryInterface:
+    pass
 
-class BinaryLinear(nn.Module):
+class BinaryLinear(nn.Module,BinaryInterface):
     def __init__(self, weight, bias) -> None:
         super().__init__()
         self.weight = nn.Parameter(weight.to(torch.float32).data)
@@ -66,7 +68,7 @@ class BinaryLinear(nn.Module):
         w = STEBinary().apply(self.weight)
         return F.linear(x, w, self.bias)
 
-class XnorBinaryLinear(nn.Module):
+class XnorBinaryLinear(nn.Module,BinaryInterface):
     def __init__(self, weight, bias) -> None:
         super(XnorBinaryLinear,self).__init__()
         self.weight = nn.Parameter(weight.to(torch.float32).data)
@@ -88,7 +90,7 @@ class XnorBinaryLinear(nn.Module):
         w=checkpoint(self.quant_weight, use_reentrant=False)
         return F.linear(x, w, self.bias)
 
-class IrBinaryLinear(nn.Module):
+class IrBinaryLinear(nn.Module,BinaryInterface):
     def __init__(self, weight, bias) -> None:
         super().__init__()
         self.weight = nn.Parameter(weight.to(torch.float32).data)
@@ -111,7 +113,7 @@ class IrBinaryLinear(nn.Module):
         w=checkpoint(self.quant_weight, use_reentrant=False)
         return F.linear(x, w, self.bias)
 
-class FdaBinaryLinear(nn.Module):
+class FdaBinaryLinear(nn.Module,BinaryInterface):
     def __init__(self, weight, bias) -> None:
         super().__init__()
         self.weight = nn.Parameter(weight.to(torch.float32).data)

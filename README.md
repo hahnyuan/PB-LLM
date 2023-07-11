@@ -7,18 +7,15 @@ The exponential growth of language models has posed challenges in terms of model
 
 ## Usage
 
-### Install requirements
+### Enviroment Setting
 
 ```shell
-pip install lm_eval
+conda create -n binary_llm python=3.10 pip
+pip install torch transformers lm_eval accelerate tensorboardX bitsandbytes sentencepiece
 ```
+Note python version must>=3.10
 
-### Editable transformers (v4.29.0) package installation 
-
-```shell
-cd transformers    
-pip install -e .
-```
+### Training
 
 Run the script with the desired arguments:
 
