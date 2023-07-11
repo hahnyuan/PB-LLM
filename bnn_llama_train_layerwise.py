@@ -25,7 +25,9 @@ from utils import *
 
 """
 Usage
-python bnn_train_layerwise.py --binarization_method xnor --debug
+CUDA_VISIBLE_DEVICES='3' XDG_CACHE_HOME='/data/shangyuzhang/' python bnn_llama_train_layerwise_1.py --binarization_method='ir' --debug --model_id 'openlm-research/open_llama_7b'
+CUDA_VISIBLE_DEVICES='4,5' XDG_CACHE_HOME='/data/shangyuzhang/' python bnn_llama_train_layerwise_1.py --binarization_method='xnor' --dataset='togethercomputer/RedPajama-Data-1T-Sample' --model_save_dir "./checkpoints/llama-7b-xnor"
+CUDA_VISIBLE_DEVICES='4,5' XDG_CACHE_HOME='/data/shangyuzhang/' python bnn_llama_train_layerwise.py --binarization_method='ste' --dataset='togethercomputer/RedPajama-Data-1T-Sample' --model_save_dir "./checkpoints/huggyllama-7b-ste" --model_id=huggyllama/llama-7b
 """
 
 def main(args):
@@ -33,10 +35,15 @@ def main(args):
     model = LlamaForCausalLM.from_pretrained(
         args.model_id, torch_dtype=torch.float16, device_map='auto',
     )
+    # model = LlamaForCausalLM.from_pretrained(
+    #     '/data/shangyuzhang/BinaryLLM/checkpoints/llama-7b-xnor', torch_dtype=torch.float16, device_map='auto',
+    # )
+
     # generate a sample
-    prompt = "Hey, are you conscious? Can you talk to me?"
+    # prompt = "Hey, are you conscious? Can you talk to me?"
+    prompt = "Hey, is llama the best language model?"
     inputs = tokenizer(prompt, return_tensors="pt")
-    generate_ids = model.generate(inputs.input_ids, max_length=100)
+    generate_ids = model.generate(inputs.input_ids, max_length=60)
     outputs = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
     print(outputs)
 
@@ -88,7 +95,7 @@ def main(args):
         training_args = TrainingArguments(
             per_device_train_batch_size=1,
             gradient_accumulation_steps=4,
-            warmup_steps=100,
+            warmup_steps=20,
             max_steps=10 if args.debug else 200,
             learning_rate=1e-4,
             fp16=True,
@@ -151,7 +158,7 @@ if __name__ == "__main__":
         "--debug", action="store_true", help="Debug mode (only 10 steps)"
     )
     parser.add_argument(
-        "--model_save_dir", type=str, default="./checkpoints", help="saving model to this directory"
+        "--model_save_dir", type=str, default="./checkpoints/llama-7b-xnor", help="saving model to this directory"
     )
     args = parser.parse_args()
 
