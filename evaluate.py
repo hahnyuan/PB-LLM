@@ -191,13 +191,11 @@ def evaluate_model(
         t_results = evaluator.simple_evaluate(
             lm,
             tasks=tasks.split(","),
+            batch_size=batch_size,
             num_fewshot=num_fewshot,
             limit=None if limit == -1 else limit,
             no_cache=True,
         )
         results.update(t_results)
         print(results)
-    with open("outputs/evaluate_result.log", "a+") as f:
-        date_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        f.write(f"{date_time} {model_name}\n {results}\n\n")
     return results
