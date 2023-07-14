@@ -55,6 +55,7 @@ class FdaBinary(torch.autograd.Function):
 class BinaryInterface:
     pass
 
+
 class BinaryLinear(nn.Module,BinaryInterface):
     def __init__(self, weight, bias) -> None:
         super().__init__()
@@ -68,6 +69,38 @@ class BinaryLinear(nn.Module,BinaryInterface):
         w = STEBinary().apply(self.weight)
         return F.linear(x, w, self.bias)
 
+class BinaryExceptOutliersLinear(nn.Module,BinaryInterface):
+    def __init__(self, weight, bias) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(weight.to(torch.float32).data)
+        if bias is not None:
+            self.bias = nn.Parameter(bias.to(torch.float32).data)
+        else:
+            self.bias = None
+    
+    def binarize_except_outliers(self):
+        w = self.weight
+        w_flat = w.view(-1)
+
+        # lower_threshold, upper_threshold = torch.quantile(w_flat, torch.tensor([0.01, 0.99]).to(w.device))
+
+        mean = torch.mean(w_flat)
+        std = torch.std(w_flat) 
+        lower_threshold = mean - 3*std
+        upper_threshold = mean + 3*std
+
+        outliers = (w < lower_threshold) | (w > upper_threshold)
+
+        w_bin = w.clone()
+        w_bin[~outliers] = STEBinary().apply(w[~outliers])
+        
+        return w_bin
+
+    def forward(self, x):
+        # w = STEBinary().apply(self.weight)
+        w = self.binarize_except_outliers()
+        return F.linear(x, w, self.bias)
+
 class XnorBinaryLinear(nn.Module,BinaryInterface):
     def __init__(self, weight, bias) -> None:
         super(XnorBinaryLinear,self).__init__()
@@ -79,8 +112,8 @@ class XnorBinaryLinear(nn.Module,BinaryInterface):
 
     def quant_weight(self):
         w = self.weight
-        #centeralization
-        w = w - w.mean(-1).view(-1, 1)
+        # #centeralization
+        # w = w - w.mean(-1).view(-1, 1)
         scaling_factor = w.abs().mean(-1).view(-1, 1).detach()
         w = STEBinary().apply(w)
         w = w * scaling_factor
@@ -130,3 +163,38 @@ class FdaBinaryLinear(nn.Module,BinaryInterface):
     def forward(self, x):
         w=checkpoint(self.quant_weight, use_reentrant=False)
         return F.linear(x, w, self.bias)
+
+
+class BiRealLinear(nn.Module,BinaryInterface):
+    def __init__(self, weight, bias) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(weight.to(torch.float32).data)
+        if bias is not None:
+            self.bias = nn.Parameter(bias.to(torch.float32).data)
+        else:
+            self.bias = None
+
+    def quant_weight(self):
+        real_weights = self.weight
+        scaling_factor = torch.mean(abs(real_weights),dim=1,keepdim=True)
+        scaling_factor = scaling_factor.detach()
+        binary_weights_no_grad = scaling_factor * torch.sign(real_weights)
+        cliped_weights = torch.clamp(real_weights, -1.0, 1.0)
+        binary_weights = binary_weights_no_grad.detach() - cliped_weights.detach() + cliped_weights
+        return binary_weights
+
+    def forward(self, input):
+        x = input
+        out_forward = torch.sign(input)
+        out_e_total = 0
+        mask1 = x < -1
+        mask2 = x < 0
+        mask3 = x < 1
+        out1 = (-1) * mask1.type(torch.float32) + (x*x + 2*x) * (1-mask1.type(torch.float32))
+        out2 = out1 * mask2.type(torch.float32) + (-x*x + 2*x) * (1-mask2.type(torch.float32))
+        out3 = out2 * mask3.type(torch.float32) + 1 * (1- mask3.type(torch.float32))
+        input = out_forward.detach() - out3.detach() + out3
+        w=checkpoint(self.quant_weight, use_reentrant=False)
+        # y = F.conv2d(x, binary_weights, stride=self.stride, padding=self.padding)
+        output = F.linear(input, w)
+        return output
