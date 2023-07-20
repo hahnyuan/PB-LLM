@@ -28,6 +28,7 @@ from datasets import load_dataset
 from quant import XnorBinaryLinear, BinaryLinear, IrBinaryLinear, BiRealLinear, BinaryExceptOutliersLinear, BinaryXnorExceptOutliersLinear
 # , FdaBinaryLinear
 from utils import print_trainable_parameters,print_memory_usage,prepare_model_for_training,save_bnn
+from evaluate import evaluate_model
 
 """
 Usage
@@ -81,7 +82,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
             per_device_train_batch_size=1,
             gradient_accumulation_steps=4,
             warmup_steps=100,
-            max_steps=20 if args.debug else 200,
+            max_steps=20 if args.debug else 1000,
             learning_rate=1e-4,
             fp16=False,
             logging_steps=1,
@@ -118,16 +119,18 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
         # bnn_meta=get_bnn_meta(model)
         # torch.save(bnn_meta,args.model_save_dir+f'/layer{i}/bnn_meta.pt')
 
+        # evaluate_model(model, tokenizer, args.model_id, 'piqa,boolq', limit=100, batch_size=8)
+
 
 
 def main(args):
-    tokenizer = LlamaTokenizer.from_pretrained(args.model_id)
-    model = LlamaForCausalLM.from_pretrained(args.model_id,device_map=torch.device("cuda:0"))
-    # model = LlamaForCausalLM.from_pretrained(
-    #     args.model_id,
-    #     torch_dtype=torch.float16,
-    #     device_map="auto",
-    # )
+    tokenizer = LlamaTokenizer.from_pretrained(args.model_id, device_map="auto")
+    # model = LlamaForCausalLM.from_pretrained(args.model_id,device_map=torch.device("cuda:0"))
+    model = LlamaForCausalLM.from_pretrained(
+        args.model_id,
+        torch_dtype=torch.float16,
+        device_map="auto",
+    )
 
     # Enable gradient checkpointing and prepare model for k-bit training
     # model.gradient_checkpointing_enable()
