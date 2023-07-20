@@ -129,8 +129,8 @@ class BinaryXnorExceptOutliersLinear(nn.Module,BinaryInterface):
 
             mean = torch.mean(w_flat).to(w.device)
             std = torch.std(w_flat).to(w.device)
-            lower_threshold = mean - 1.96*std
-            upper_threshold = mean + 1.96*std #1.96 : 95%, 
+            lower_threshold = mean - 1.6*std #1.65 : 90%, 
+            upper_threshold = mean + 1.6*std #1.96 : 95%, 
 
             outliers = (w < lower_threshold) | (w > upper_threshold)
             self.outliers = outliers
@@ -153,9 +153,10 @@ class BinaryXnorExceptOutliersLinear(nn.Module,BinaryInterface):
 
     def forward(self, x):
         # w = STEBinary().apply(self.weight)
-        w, outliers = self.binarize_except_outliers()
+        w, _ = self.binarize_except_outliers()
         output = F.linear(x, w, self.bias)
         return output
+
     
 class XnorBinaryLinear(nn.Module,BinaryInterface):
     def __init__(self, weight, bias) -> None:
@@ -255,3 +256,5 @@ class BiRealLinear(nn.Module,BinaryInterface):
         output = F.linear(input, w)
         return output
     
+
+
