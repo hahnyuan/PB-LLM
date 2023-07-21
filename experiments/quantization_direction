@@ -25,7 +25,7 @@ from transformers import (
 
 # from transformers import LlamaTokenizer, LlamaForCausalLM
 from datasets import load_dataset
-from quant import XnorBinaryLinear, BinaryLinear, IrBinaryLinear, BiRealLinear, BinaryExceptOutliersLinear, BinaryXnorExceptOutliersLinear
+from quant import XnorBinaryLinear, BinaryLinear, IrBinaryLinear, BiRealLinear, BinaryExceptOutliersLinear, BinaryXnorExceptOutliersLinear, BinaryXnorExceptOutliersLinearColumn
 # , FdaBinaryLinear
 from utils import print_trainable_parameters,print_memory_usage,prepare_model_for_training,save_bnn
 from evaluate import evaluate_model
@@ -52,6 +52,8 @@ def replace_qlinear(root_module, name_prefix=""):
                 qlinear = BinaryExceptOutliersLinear(module.weight, module.bias)
             elif args.binarization_method == "xnor_except_outlier":
                 qlinear = BinaryXnorExceptOutliersLinear(module.weight, module.bias)
+            elif args.binarization_method == "xnor_except_outlier_column":
+                qlinear = BinaryXnorExceptOutliersLinearColumn(module.weight, module.bias)
             elif args.binarization_method == "ir":
                 qlinear = IrBinaryLinear(module.weight, module.bias)
             elif args.binarization_method == "xnor":
@@ -82,7 +84,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
             per_device_train_batch_size=1,
             gradient_accumulation_steps=4,
             warmup_steps=100,
-            max_steps=20 if args.debug else 1000,
+            max_steps=1 if args.debug else 1000,
             learning_rate=1e-4,
             fp16=False,
             logging_steps=1,
@@ -119,7 +121,8 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
         # bnn_meta=get_bnn_meta(model)
         # torch.save(bnn_meta,args.model_save_dir+f'/layer{i}/bnn_meta.pt')
 
-        # evaluate_model(model, tokenizer, args.model_id, 'piqa,boolq', limit=100, batch_size=8)
+        model.eval()
+        evaluate_model(model, tokenizer, args.model_id, 'piqa,boolq', limit=100)
 
 
 
@@ -187,7 +190,7 @@ if __name__ == "__main__":
         "--binarization_method",
         type=str,
         default="xnor",
-        choices=["ste", "ir", "fda", "xnor","bireal","ste_except_outlier", "xnor_except_outlier"],
+        choices=["ste", "ir", "fda", "xnor","bireal","ste_except_outlier", "xnor_except_outlier", "xnor_except_outlier_column"],
     )
     parser.add_argument(
         "--debug", action="store_true", help="Debug mode (only 10 steps)"
