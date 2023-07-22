@@ -72,7 +72,8 @@ class OutliersQLinearColumn(nn.Module, BinaryInterface):
         return w
 
     def forward(self, x):
-        w = self.binarize_except_outliers()
+        w=checkpoint(self.binarize_except_outliers, )
+        # w = self.binarize_except_outliers()
         output = F.linear(x, w, self.dense_quantizer.bias)
         return output
 
@@ -120,6 +121,7 @@ class BinaryXnorExceptOutliersLinearActivationColumn(nn.Module, BinaryInterface)
         return w_bin
 
     def forward(self, x):
-        w = self.binarize_except_outliers(x)
+        w=checkpoint(self.binarize_except_outliers, x)
+        # w = self.binarize_except_outliers(x)
         output = F.linear(x, w, self.bias)
         return output
