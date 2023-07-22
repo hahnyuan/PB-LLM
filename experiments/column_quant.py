@@ -152,7 +152,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
         print(boolq, piqa)
         with open("outputs/intrain_eval.log", "a+") as f:
             f.write(
-                f"{args.model_id}: {args.binarization_method} {args.outlier_fraction} {args.train_steps} {module_name} {boolq} {piqa}\n"
+                f"{args.model_id}: {args.binarization_method} {args.outlier_fraction} {args.train_steps} {args.dataset} {module_name} {boolq} {piqa}\n"
             )
 
         save_bnn(
