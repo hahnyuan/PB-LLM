@@ -142,10 +142,14 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
                 param.requires_grad = False
 
         print_memory_usage()
-        save_bnn(model, args.model_save_dir + f"/{args.granularity}/{module_name}")
-
         model.eval()
-        evaluate_model(model, tokenizer, args.model_id, "piqa,boolq", limit=100)
+        result = evaluate_model(model, tokenizer, args.model_id, "piqa,boolq", limit=50)
+
+        save_bnn(
+            model,
+            args.model_save_dir
+            + f"/{args.granularity}/{args.model_id.replace('/','_')}_{module_name}",
+        )
 
 
 def main(args):
@@ -225,7 +229,11 @@ if __name__ == "__main__":
             "ste_outlier",
             "xnor_outlier",
             "xnor_outlier_column",
+            "ir_outlier_column",
             "xnor_act_outlier_column",
+            "ir_act_outlier_column",
+            "fda_act_outlier_column",
+            "bireal_act_outlier_column",
         ],
     )
     parser.add_argument(

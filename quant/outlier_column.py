@@ -35,14 +35,14 @@ class OutliersQLinearColumn(nn.Module, BinaryInterface):
             "outlier_columns_index",
             torch.zeros(self.n_outlier_columns, dtype=torch.int16),
         )
-        self.outlier_weight = nn.Parameter(
-            torch.zeros(
-                [
-                    weight.size(1),
-                    self.n_outlier_columns,
-                ]
-            )
-        )
+        # self.outlier_weight = nn.Parameter(
+        #     torch.zeros(
+        #         [
+        #             weight.size(1),
+        #             self.n_outlier_columns,
+        #         ]
+        #     )
+        # )
 
         self.outlier_metric = outlier_metric
 
@@ -67,12 +67,14 @@ class OutliersQLinearColumn(nn.Module, BinaryInterface):
                 self.outlier_columns_index = torch.cat(
                     [outlier_index_low, outlier_index_high]
                 )
-                self.outlier_weight.data = w[:, self.outlier_columns_index]
+                # self.outlier_weight.data = w[:, self.outlier_columns_index]
             self.outlier_calibrated = True
 
     def binarize_except_outliers(self, x=None):
         w = self.dense_quantizer.quant_weight()
-        w[:, self.outlier_columns_index] = self.outlier_weight
+        w[:, self.outlier_columns_index] = self.dense_quantizer.weight[
+            :, self.outlier_columns_index
+        ]
         return w
 
     def forward(self, x):
@@ -85,7 +87,7 @@ class OutliersQLinearColumn(nn.Module, BinaryInterface):
 
     def get_save_weight_dict(self):
         return {
-            "outlier_weight": self.outlier_weight,
+            # "outlier_weight": self.outlier_weight,
             "outlier_columns_index": self.outlier_columns_index,
         }
 

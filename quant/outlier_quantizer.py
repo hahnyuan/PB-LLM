@@ -89,27 +89,3 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
         w, outliers = self.binarize_except_outliers()
         output = F.linear(x, w, self.bias)
         return output
-
-
-class XnorBinaryLinear(nn.Module, BinaryInterface):
-    def __init__(self, weight, bias) -> None:
-        super(XnorBinaryLinear, self).__init__()
-        self.weight = nn.Parameter(weight.to(torch.float32).data)
-        if bias is not None:
-            self.bias = nn.Parameter(bias.to(torch.float32).data)
-        else:
-            self.bias = None
-
-    def quant_weight(self):
-        w = self.weight
-        # #centeralization
-        # w = w - w.mean(-1).view(-1, 1)
-        w = w - w.mean(-1).view(-1, 1)
-        scaling_factor = w.abs().mean(-1).view(-1, 1).detach()
-        w = STEBinary().apply(w)
-        w = w * scaling_factor
-        return w
-
-    def forward(self, x):
-        w = checkpoint(self.quant_weight, use_reentrant=False)
-        return F.linear(x, w, self.bias)
