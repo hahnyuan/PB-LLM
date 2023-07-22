@@ -74,9 +74,20 @@ def replace_qlinear(root_module, name_prefix=""):
             else:
                 print(f"not supported binarization method {args.binarization_method}")
                 raise NotImplementedError
-            if "outlier_column" in args.binarization_method:
+            if "act_outlier_column" in args.binarization_method:
                 qlinear = OutliersQLinearColumn(
-                    module.weight, module.bias, dense_class=quant_cls
+                    module.weight,
+                    module.bias,
+                    dense_class=quant_cls,
+                    outlier_metric="act_L1",
+                    outlier_percent=args.outlier_percent,
+                )
+            elif "outlier_column" in args.binarization_method:
+                qlinear = OutliersQLinearColumn(
+                    module.weight,
+                    module.bias,
+                    dense_class=quant_cls,
+                    outlier_percent=args.outlier_percent,
                 )
             elif "outlier" in args.binarization_method:
                 qlinear = OutliersLinear(
@@ -103,7 +114,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
             per_device_train_batch_size=1,
             gradient_accumulation_steps=4,
             warmup_steps=100,
-            max_steps=10 if args.debug else 1000,
+            max_steps=10 if args.debug else args.train_steps,
             learning_rate=1e-4,
             fp16=False,
             logging_steps=1,
@@ -128,17 +139,10 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
         trainer.train()
         for name, param in model.named_parameters():
             if param.requires_grad:
-                # print(name, "requires grad, and set to not required")
                 param.requires_grad = False
-            # else:
-            # print(name, "does not require grad")
 
         print_memory_usage()
-        # if 'layers.0' in module_name:
         save_bnn(model, args.model_save_dir + f"/{args.granularity}/{module_name}")
-        # trainer.save_model(output_dir=args.model_save_dir+f'/layer{i}')
-        # bnn_meta=get_bnn_meta(model)
-        # torch.save(bnn_meta,args.model_save_dir+f'/layer{i}/bnn_meta.pt')
 
         model.eval()
         evaluate_model(model, tokenizer, args.model_id, "piqa,boolq", limit=100)
@@ -146,13 +150,6 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
 
 def main(args):
     tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
-    # tokenizer = LlamaTokenizer.from_pretrained(args.model_id, device_map="auto")
-    # model = LlamaForCausalLM.from_pretrained(args.model_id,device_map=torch.device("cuda:0"))
-    # model = LlamaForCausalLM.from_pretrained(
-    #     args.model_id,
-    #     torch_dtype=torch.float16,
-    #     device_map="auto",
-    # )
     model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
 
     # Enable gradient checkpointing and prepare model for k-bit training
@@ -200,7 +197,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--granularity",
         type=str,
-        default="per_block",
+        default="whole_model",
         choices=["per_block", "per_linear", "whole_model"],
     )
     parser.add_argument(
@@ -213,19 +210,26 @@ if __name__ == "__main__":
         "--order", type=str, default="forward", choices=["forward", "reverse"]
     )
     parser.add_argument(
+        "-s", "--train_steps", type=int, default=1000, help="Number of training steps"
+    )
+    parser.add_argument(
         "--binarization_method",
         type=str,
-        default="xnor_except_outlier_column",
+        default="xnor_act_outlier_column",
         choices=[
             "ste",
             "ir",
             "fda",
             "xnor",
             "bireal",
-            "ste_except_outlier",
-            "xnor_except_outlier",
-            "xnor_except_outlier_column",
+            "ste_outlier",
+            "xnor_outlier",
+            "xnor_outlier_column",
+            "xnor_act_outlier_column",
         ],
+    )
+    parser.add_argument(
+        "--outlier_percent", type=float, default=0.05, help="Percentage of outliers"
     )
     parser.add_argument(
         "--debug", action="store_true", help="Debug mode (only 10 steps)"
