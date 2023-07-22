@@ -26,7 +26,13 @@ from transformers import (
 # from transformers import LlamaTokenizer, LlamaForCausalLM
 from datasets import load_dataset
 from quant import BinaryLinear, IrBinaryLinear, FdaBinaryLinear, XnorBinaryLinear
-from utils import print_trainable_parameters,print_memory_usage,prepare_model_for_training,save_bnn
+from utils import (
+    print_trainable_parameters,
+    print_memory_usage,
+    prepare_model_for_training,
+    save_bnn,
+    generate_sample_test,
+)
 
 """
 Usage
@@ -63,7 +69,6 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
     """
     ordered_name_modules: [(name, module), ...]
     """
-    
 
     for module_name, module in ordered_name_modules:
         print_trainable_parameters(model)
@@ -71,11 +76,13 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
 
         # Define training arguments
         training_args = TrainingArguments(
-            per_device_train_batch_size=1,
-            gradient_accumulation_steps=4,
+            per_device_train_batch_size=8,
+            # auto_find_batch_size=True,
+            gradient_accumulation_steps=1,
             warmup_steps=100,
-            max_steps=2 if args.debug else 200,
+            max_steps=2 if args.debug else args.train_steps,
             learning_rate=1e-4,
+            lr_scheduler_type="cosine",
             fp16=False,
             logging_steps=1,
             output_dir="outputs",
@@ -102,19 +109,19 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
                 # print(name, "requires grad, and set to not required")
                 param.requires_grad = False
             # else:
-                # print(name, "does not require grad")
-        
+            # print(name, "does not require grad")
+        generate_sample_test(model, tokenizer)
+
         print_memory_usage()
-        save_bnn(model, args.model_save_dir+f'/{args.granularity}/{module_name}')
+        save_bnn(model, args.model_save_dir + f"/{args.granularity}/{module_name}")
         # trainer.save_model(output_dir=args.model_save_dir+f'/layer{i}')
         # bnn_meta=get_bnn_meta(model)
         # torch.save(bnn_meta,args.model_save_dir+f'/layer{i}/bnn_meta.pt')
 
 
-
 def main(args):
     tokenizer = LlamaTokenizer.from_pretrained(args.model_id)
-    model = LlamaForCausalLM.from_pretrained(args.model_id,device_map="auto")
+    model = LlamaForCausalLM.from_pretrained(args.model_id, device_map="auto")
     # model = LlamaForCausalLM.from_pretrained(
     #     args.model_id,
     #     torch_dtype=torch.float16,
@@ -135,17 +142,19 @@ def main(args):
     else:
         raise NotImplementedError
     if args.granularity == "per_block":
-        ordered_name_modules = [(f"block{i}", _) for i, _ in enumerate(model.base_model.layers)]
+        ordered_name_modules = [
+            (f"block{i}", _) for i, _ in enumerate(model.base_model.layers)
+        ]
         if args.order == "reverse":
             ordered_name_modules = ordered_name_modules[::-1]
     elif args.granularity == "per_linear":
         ordered_name_modules = []
-        for name,module in model.named_modules():
+        for name, module in model.named_modules():
             if isinstance(module, nn.Linear):
-                ordered_name_modules.append((name,module))
+                ordered_name_modules.append((name, module))
     else:
         raise NotImplementedError
-    iterative_train(model,ordered_name_modules, data, tokenizer)
+    iterative_train(model, ordered_name_modules, data, tokenizer)
 
 
 if __name__ == "__main__":
@@ -157,13 +166,22 @@ if __name__ == "__main__":
         help="Pretrained model ID",
     )
     parser.add_argument(
-        "--granularity", type=str, default="per_block", choices=["per_block","per_linear"]
+        "--granularity",
+        type=str,
+        default="per_block",
+        choices=["per_block", "per_linear"],
     )
     parser.add_argument(
         "--dataset", type=str, default="red_pajama", help="Dataset name"
     )
     parser.add_argument(
         "--data_percent", type=float, default=100, help="Percentage of data to use"
+    )
+    parser.add_argument(
+        "--train_steps",
+        type=int,
+        default=100,
+        help="Number of training steps per layer",
     )
     parser.add_argument(
         "--order", type=str, default="forward", choices=["forward", "reverse"]

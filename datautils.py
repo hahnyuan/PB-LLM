@@ -14,24 +14,36 @@ def set_seed(seed):
     torch.random.manual_seed(seed)
 
 
-def get_redpajama_train(tokenizer, percent=10, seed=3, batch_size=128):
+def get_redpajama_train(tokenizer, percent=10, seed=3, batch_size=128, max_length=2048):
     def tokenization(example):
-        return tokenizer(example["text"], truncation=True, max_length=512)
-    
+        return tokenizer(example["text"], truncation=True, max_length=max_length)
+
     if percent != 100:
-        split=f'train[:{int(850000*percent/100)}]'
+        split = f"train[:{int(850000*percent/100)}]"
     else:
-        split='train'
-    dataset = load_dataset(
-        "togethercomputer/RedPajama-Data-1T-Sample",
-        split=split
-    )
+        split = "train"
+    dataset = load_dataset("togethercomputer/RedPajama-Data-1T-Sample", split=split)
 
     processed_dataset = dataset.map(
         tokenization, batched=True, batch_size=batch_size, num_proc=os.cpu_count()
     )
     return processed_dataset
 
+def get_english_quote(dataset_name,tokenizer):
+    data = load_dataset(dataset_name)
+    data = data.map(lambda samples: tokenizer(samples["quote"]), batched=True)
+    return data["train"]
+
+def get_qat_dataset(name,tokenizer,data_percent):
+    if name == "red_pajama":
+        data = get_redpajama_train(tokenizer, data_percent)
+        
+    elif name == "Abirate/english_quotes":
+        data=get_english_quote(name,tokenizer)
+    else:
+        raise NotImplementedError
+    data = data.shuffle()
+    return data
 
 def get_wikitext2(nsamples, seed, seqlen, model, cache_dir):
     print("get_wikitext2")
@@ -206,3 +218,4 @@ def get_loaders(name, nsamples=128, seed=0, seqlen=2048, model="", cache_dir="")
         train = wiki_train + ptb_train + c4_train
         val = None
         return train, val
+    

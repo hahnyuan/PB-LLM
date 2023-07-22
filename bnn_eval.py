@@ -24,8 +24,7 @@ from transformers import (
     pipeline,
     AutoConfig,
 )
-import quant
-from utils import prepare_model_for_eval, load_bnn
+from utils import prepare_model_for_eval, load_bnn, generate_sample_test
 import torch.nn.functional as F
 from evaluate import evaluate_model
 
@@ -49,6 +48,9 @@ def main(args):
         )
 
     model = prepare_model_for_eval(model)
+
+    # generate_sample_test(model,tokenizer)
+
     results = evaluate_model(
         model,
         tokenizer,

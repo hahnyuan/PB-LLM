@@ -74,7 +74,14 @@ def main(model_id, dataset_name):
     # Train the model
     trainer.train()
     model.eval()
-    evaluate_model(model,tokenizer, args.model_id, args.tasks,limit=args.eval_limit,batch_size=args.eval_batch_size)
+    evaluate_model(
+        model,
+        tokenizer,
+        args.model_id,
+        args.tasks,
+        limit=args.eval_limit,
+        batch_size=args.eval_batch_size,
+    )
 
 
 if __name__ == "__main__":
