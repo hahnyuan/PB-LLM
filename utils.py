@@ -74,8 +74,13 @@ def get_bnn_weights(model):
     weights = {}
     for name, module in model.named_modules():
         if isinstance(module, quant.BinaryInterface):
-            weights[name] = module.weight.data.half().cpu()
-            weights[name + "_bias"] = module.bias
+            layer_weight_dict = module.get_save_weight_dict()
+            layer_weight_dict = {
+                name + "_" + k: v for k, v in layer_weight_dict.items()
+            }
+            weights.update(layer_weight_dict)
+            # weights[name] = module.weight.data.half().cpu()
+            # weights[name + "_bias"] = module.bias
     return weights
 
 
