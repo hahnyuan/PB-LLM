@@ -30,22 +30,12 @@ from evaluate import evaluate_model
 
 
 def main(args):
-    tokenizer = LlamaTokenizer.from_pretrained(args.model_id)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
+    model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
 
     bnn_meta_path = os.path.join(args.checkpoint, "meta.json")
     if os.path.exists(bnn_meta_path):
-        model = LlamaForCausalLM.from_pretrained(
-            args.model_id,
-            torch_dtype=torch.float16,
-            device_map="auto",
-        )
         load_bnn(model, args.checkpoint)
-    else:
-        model = LlamaForCausalLM.from_pretrained(
-            args.model_id,
-            torch_dtype=torch.float16,
-            device_map="auto",
-        )
 
     model = prepare_model_for_eval(model)
 

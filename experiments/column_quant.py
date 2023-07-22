@@ -80,14 +80,14 @@ def replace_qlinear(root_module, name_prefix=""):
                     module.bias,
                     dense_class=quant_cls,
                     outlier_metric="act_L1",
-                    outlier_percent=args.outlier_percent,
+                    outlier_fraction=args.outlier_fraction,
                 )
             elif "outlier_column" in args.binarization_method:
                 qlinear = OutliersQLinearColumn(
                     module.weight,
                     module.bias,
                     dense_class=quant_cls,
-                    outlier_percent=args.outlier_percent,
+                    outlier_fraction=args.outlier_fraction,
                 )
             elif "outlier" in args.binarization_method:
                 qlinear = OutliersLinear(
@@ -110,45 +110,55 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
         replace_qlinear(module, f"{module_name}.")
 
         # Define training arguments
-        training_args = TrainingArguments(
-            per_device_train_batch_size=1,
-            gradient_accumulation_steps=4,
-            warmup_steps=100,
-            max_steps=10 if args.debug else args.train_steps,
-            learning_rate=1e-4,
-            fp16=False,
-            logging_steps=1,
-            output_dir="outputs",
-            optim="adamw_torch",
-            report_to="tensorboard",
-        )
+        if args.train_steps:
+            training_args = TrainingArguments(
+                per_device_train_batch_size=1,
+                gradient_accumulation_steps=4,
+                warmup_steps=100,
+                max_steps=args.train_steps,
+                learning_rate=1e-4,
+                fp16=False,
+                logging_steps=1,
+                output_dir="outputs",
+                optim="adamw_torch",
+                report_to="tensorboard",
+            )
 
-        # Create trainer
-        trainer = Trainer(
-            model=model,
-            train_dataset=data,
-            args=training_args,
-            data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
-        )
+            # Create trainer
+            trainer = Trainer(
+                model=model,
+                train_dataset=data,
+                args=training_args,
+                data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+            )
 
-        model.config.use_cache = (
-            False  # silence the warnings. Please re-enable for inference!
-        )
+            model.config.use_cache = (
+                False  # silence the warnings. Please re-enable for inference!
+            )
 
-        # Train the model
-        trainer.train()
+            # Train the model
+            trainer.train()
         for name, param in model.named_parameters():
             if param.requires_grad:
                 param.requires_grad = False
 
         print_memory_usage()
         model.eval()
-        result = evaluate_model(model, tokenizer, args.model_id, "piqa,boolq", limit=50)
+        result = evaluate_model(
+            model, tokenizer, args.model_id, "piqa,boolq", limit=100
+        )
+        boolq = result["results"]["boolq"]["acc"]
+        piqa = result["results"]["piqa"]["acc"]
+        print(boolq, piqa)
+        with open("outputs/intrain_eval.log", "a+") as f:
+            f.write(
+                f"{args.model_id}: {args.binarization_method} {args.outlier_fraction} {args.train_steps} {module_name} {boolq} {piqa}\n"
+            )
 
         save_bnn(
             model,
             args.model_save_dir
-            + f"/{args.granularity}/{args.model_id.replace('/','_')}_{module_name}",
+            + f"/{args.granularity}/{args.model_id.replace('/','_')}_o{args.outlier_fraction}_{module_name}",
         )
 
 
@@ -237,7 +247,7 @@ if __name__ == "__main__":
         ],
     )
     parser.add_argument(
-        "--outlier_percent", type=float, default=0.05, help="Percentage of outliers"
+        "--outlier_fraction", type=float, default=0.05, help="Percentage of outliers"
     )
     parser.add_argument(
         "--debug", action="store_true", help="Debug mode (only 10 steps)"

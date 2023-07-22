@@ -17,7 +17,7 @@ class OutliersQLinearColumn(nn.Module, BinaryInterface):
         self,
         weight,
         bias,
-        outlier_percent=0.05,
+        outlier_fraction=0.05,
         outlier_metric="L1",
         dense_class=XnorBinaryLinear,
     ) -> None:
@@ -27,8 +27,8 @@ class OutliersQLinearColumn(nn.Module, BinaryInterface):
         super().__init__()
         self.dense_quantizer = dense_class(weight, bias)
         self.printed = False
-        self.outlier_percent = outlier_percent
-        self.n_outlier_columns = int(outlier_percent * weight.shape[1])
+        self.outlier_fraction = outlier_fraction
+        self.n_outlier_columns = int(outlier_fraction * weight.shape[1])
         self.outlier_calibrated = False
 
         self.register_buffer(
@@ -52,7 +52,7 @@ class OutliersQLinearColumn(nn.Module, BinaryInterface):
                 print(f"outlier_columns_index is calibrated, skip")
             else:
                 print(
-                    f"calibrating outlier columns, outlier_percent={self.outlier_percent}, metric={self.outlier_metric}"
+                    f"calibrating outlier columns, outlier_fraction={self.outlier_fraction}, metric={self.outlier_metric}"
                 )
                 w = self.dense_quantizer.weight
                 if self.outlier_metric == "L1":
@@ -70,7 +70,7 @@ class OutliersQLinearColumn(nn.Module, BinaryInterface):
                 # self.outlier_weight.data = w[:, self.outlier_columns_index]
             self.outlier_calibrated = True
 
-    def binarize_except_outliers(self, x=None):
+    def binarize_except_outliers(self):
         w = self.dense_quantizer.quant_weight()
         w[:, self.outlier_columns_index] = self.dense_quantizer.weight[
             :, self.outlier_columns_index
@@ -92,4 +92,4 @@ class OutliersQLinearColumn(nn.Module, BinaryInterface):
         }
 
     def __repr__(self):
-        return f"OutliersQLinearColumn({self.n_outlier_columns}, outlier_percent={self.outlier_percent}, outlier_metric={self.outlier_metric})"
+        return f"OutliersQLinearColumn({self.n_outlier_columns}, outlier_fraction={self.outlier_fraction}, outlier_metric={self.outlier_metric})"
