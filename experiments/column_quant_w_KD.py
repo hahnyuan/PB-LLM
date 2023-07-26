@@ -41,6 +41,7 @@ from utils import (
     print_trainable_parameters,
     print_memory_usage,
     prepare_model_for_training,
+    prepare_model_for_eval,
     save_bnn,
 )
 from evaluate import evaluate_model
@@ -134,8 +135,8 @@ def iterative_train(model, teacher_model,ordered_name_modules, data, tokenizer):
 
                     self.teacher = teacher_model
                     # place teacher on same device as student
-                    self._move_model_to_device(self.teacher, self.model.device)
-                    self.teacher.eval()
+                    # self._move_model_to_device(self.teacher, self.model.device)
+                    # self.teacher.eval()
 
                 def kl_loss(self, tensor1, tensor2, temperature=0.5):
                     # student: tensor1, teacher: tensor2
@@ -158,7 +159,8 @@ def iterative_train(model, teacher_model,ordered_name_modules, data, tokenizer):
                     else:
                         labels = None
                     outputs = model(**inputs)
-                    outputs_teacher = teacher_model(**inputs)
+                    # teacher_input = inputs.to(self.teacher.device())
+                    outputs_teacher = self.teacher(**inputs)
                     kd_loss = self.kl_loss(outputs[1], outputs_teacher[1])
                     # kd_loss = F.mse_loss(outputs[1],outputs_teacher[1])
                     # print(kd_loss)
@@ -189,7 +191,7 @@ def iterative_train(model, teacher_model,ordered_name_modules, data, tokenizer):
                 model=model,
                 args=training_args,
                 teacher_model=teacher_model,
-                train_dataset=data["train"],
+                train_dataset=data,
                 data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
             )
 
@@ -228,14 +230,26 @@ def iterative_train(model, teacher_model,ordered_name_modules, data, tokenizer):
 
 
 def main(args):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
-    model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
+    if 'openlm' in args.model_id:
+        tokenizer = LlamaTokenizer.from_pretrained(args.model_id, device_map="auto")
+        model = LlamaForCausalLM.from_pretrained(args.model_id, device_map="auto")#.to(torch.device("cuda:0"))
+        model = prepare_model_for_training(model)
 
-    # Enable gradient checkpointing and prepare model for k-bit training
-    # model.gradient_checkpointing_enable()
-    model = prepare_model_for_training(model)
-    teacher_model = copy.deepcopy(model)
-    teacher_model.eval()
+        teacher_model = LlamaForCausalLM.from_pretrained(args.model_id, device_map="auto")#.to(torch.device("cuda:1"))
+        teacher_model = prepare_model_for_training(teacher_model)
+
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
+        model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")#.to(torch.device("cuda:0"))
+        # model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="cuda:0")
+
+        # Enable gradient checkpointing and prepare model for k-bit training
+        # model.gradient_checkpointing_enable()
+        model = prepare_model_for_training(model)
+
+        teacher_model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")#.to(torch.device("cuda:1"))
+        teacher_model = prepare_model_for_training(teacher_model)
+        # teacher_model = copy.deepcopy(model)
 
     tokenizer.pad_token = tokenizer.eos_token
 
