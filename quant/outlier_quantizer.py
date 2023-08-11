@@ -22,8 +22,8 @@ class BinaryExceptOutliersLinear(nn.Module, BinaryInterface):
         # lower_threshold, upper_threshold = torch.quantile(w_flat, torch.tensor([0.01, 0.99]).to(w.device))
         mean = torch.mean(w_flat).to(w.device)
         std = torch.std(w_flat).to(w.device)
-        lower_threshold = mean - 1 * std
-        upper_threshold = mean + 1 * std
+        lower_threshold = mean - 1.96 * std
+        upper_threshold = mean + 1.96 * std
         outliers = (w < lower_threshold) | (w > upper_threshold)
         # if self.printed is not True:
         #     print(outliers.sum()/outliers.numel())
@@ -40,7 +40,6 @@ class BinaryExceptOutliersLinear(nn.Module, BinaryInterface):
         # w = STEBinary().apply(self.weight)
         w = self.binarize_except_outliers()
         return F.linear(x, w, self.bias)
-
 
 class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
     def __init__(self, weight, bias) -> None:
@@ -62,8 +61,8 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
 
             mean = torch.mean(w_flat).to(w.device)
             std = torch.std(w_flat).to(w.device)
-            lower_threshold = mean - 1.96 * std
-            upper_threshold = mean + 1.96 * std  # 1.96 : 95%,
+            lower_threshold = mean - 1.65 * std  # 1.65 : 90%
+            upper_threshold = mean + 1.65 * std  # 1.96 : 95%,
 
             outliers = (w < lower_threshold) | (w > upper_threshold)
             self.outliers = outliers
@@ -74,18 +73,20 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
         w = self.weight
         w_bin = w.clone()
         scaling_factor = w[~self.outliers].abs().mean(-1).view(-1, 1).detach()
+        # print(scaling_factor.shape)
 
         # w = STEBinary().apply(w)
+        w_bin[self.outliers] = w[self.outliers] * 2
         w_bin[~self.outliers] = STEBinary().apply(w[~self.outliers])
         w_bin[~self.outliers] = w[~self.outliers] * scaling_factor
 
         # with torch.no_grad():
         #     w_bin.grad[outliers] = 0.
 
-        return w_bin, self.outliers
+        return w_bin
 
     def forward(self, x):
         # w = STEBinary().apply(self.weight)
-        w, outliers = self.binarize_except_outliers()
+        w = self.binarize_except_outliers()
         output = F.linear(x, w, self.bias)
         return output
