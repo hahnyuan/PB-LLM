@@ -50,6 +50,16 @@ Usage
 python bnn_train_layerwise.py --binarization_method xnor --debug
 """
 
+from transformers import get_cosine_with_hard_restarts_schedule_with_warmup
+
+def get_scheduler(num_training_steps: int):
+    def lr_scheduler(optimizer):
+        return get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, 
+                                                                  num_warmup_steps=100, 
+                                                                  num_training_steps=num_training_steps,
+                                                                  num_cycles=5)
+    return lr_scheduler
+
 
 def replace_qlinear(root_module, name_prefix=""):
     module_name_dict = {name: module for name, module in root_module.named_modules()}
@@ -89,10 +99,12 @@ def replace_qlinear(root_module, name_prefix=""):
                     dense_class=quant_cls,
                     outlier_fraction=args.outlier_fraction,
                 )
+            # elif "outlier" in args.binarization_method:
+            #     qlinear = OutliersLinear(
+            #         module.weight, module.bias, dense_class=quant_cls
+            #     )
             elif "outlier" in args.binarization_method:
-                qlinear = OutliersLinear(
-                    module.weight, module.bias, dense_class=quant_cls
-                )
+                qlinear = BinaryXnorExceptOutliersLinear(module.weight, module.bias)
             else:
                 qlinear = quant_cls(module.weight, module.bias)
 
@@ -114,7 +126,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
             training_args = TrainingArguments(
                 per_device_train_batch_size=1,
                 gradient_accumulation_steps=4,
-                warmup_steps=100,
+                warmup_steps=200,
                 max_steps=args.train_steps,
                 learning_rate=1e-4,
                 fp16=False,
@@ -130,6 +142,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
                 train_dataset=data,
                 args=training_args,
                 data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+                # lr_scheduler=get_scheduler(args.train_steps)
             )
 
             model.config.use_cache = (
@@ -144,16 +157,16 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
 
         print_memory_usage()
         model.eval()
-        result = evaluate_model(
-            model, tokenizer, args.model_id, "piqa,boolq", limit=100
-        )
-        boolq = result["results"]["boolq"]["acc"]
-        piqa = result["results"]["piqa"]["acc"]
-        print(boolq, piqa)
-        with open("outputs/intrain_eval.log", "a+") as f:
-            f.write(
-                f"{args.model_id}: {args.binarization_method} {args.outlier_fraction} {args.train_steps} {args.dataset} {module_name} {boolq} {piqa}\n"
-            )
+        # result = evaluate_model(
+        #     model, tokenizer, args.model_id, "piqa,boolq", limit=100
+        # )
+        # boolq = result["results"]["boolq"]["acc"]
+        # piqa = result["results"]["piqa"]["acc"]
+        # print(boolq, piqa)
+        # with open("outputs/intrain_eval.log", "a+") as f:
+        #     f.write(
+        #         f"{args.model_id}: {args.binarization_method} {args.outlier_fraction} {args.train_steps} {args.dataset} {module_name} {boolq} {piqa}\n"
+        #     )
 
         save_bnn(
             model,
@@ -161,10 +174,18 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
             + f"/{args.granularity}/{args.model_id.replace('/','_')}_o{args.outlier_fraction}_{module_name}",
         )
 
+        model.eval()
+        evaluate_model(model, tokenizer, args.model_id, 'piqa,boolq', limit=-1)
+
+
 
 def main(args):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
-    model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
+    if 'openlm' in args.model_id:
+        tokenizer = LlamaTokenizer.from_pretrained(args.model_id, device_map="auto")
+        model = LlamaForCausalLM.from_pretrained(args.model_id, device_map="auto")
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
+        model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
 
     # Enable gradient checkpointing and prepare model for k-bit training
     # model.gradient_checkpointing_enable()
