@@ -98,6 +98,7 @@ def load_bnn(model, load_path):
     print(f"loading bnn model from {load_path}")
     bnn_meta = json.load(open(load_path + "/meta.json", "r"))
     bnn_weights = torch.load(load_path + "/weights.pth")
+    print(bnn_weights.keys())
 
     module_name_dict = {name: module for name, module in model.named_modules()}
     for name, module in module_name_dict.items():
@@ -110,7 +111,8 @@ def load_bnn(model, load_path):
             # choose binariztaion method
             if name in bnn_meta:
                 binarization_method = bnn_meta[name]
-                weight = bnn_weights[name]
+                weight = bnn_weights[name + "_weight"]
+                # weight = bnn_weights[name]
                 bias = bnn_weights[name + "_bias"]
                 # weight=weight.to(module.weight.device)
                 # if bias is not None:
