@@ -30,8 +30,12 @@ from evaluate import evaluate_model
 
 
 def main(args):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
-    model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
+    if 'openlm' in args.model_id:
+        tokenizer = LlamaTokenizer.from_pretrained(args.model_id, device_map="auto")
+        model = LlamaForCausalLM.from_pretrained(args.model_id, device_map="auto")
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
+        model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
 
     bnn_meta_path = os.path.join(args.checkpoint, "meta.json")
     if os.path.exists(bnn_meta_path):
@@ -79,8 +83,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tasks",
         type=str,
-        default="boolq",
-        help="evaluate tasks name, can be tasks separated by , lambada_openai,piqa,arc_easy,arc_challenge,openbookqa, boolq",
+        default="llmqat",
+        help="evaluate tasks name, can be tasks separated by , llmqat is the evaluation in the llmqat paper",
     )
     parser.add_argument(
         "--eval_limit",
@@ -90,7 +94,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--eval_batch_size",
-        default=32,
+        default=4,
         type=int,
         help="eval batch size, default is 32",
     )
