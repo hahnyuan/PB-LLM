@@ -41,8 +41,9 @@ class BinaryExceptOutliersLinear(nn.Module, BinaryInterface):
         w = self.binarize_except_outliers()
         return F.linear(x, w, self.bias)
 
+
 class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
-    def __init__(self, weight, bias) -> None:
+    def __init__(self, weight, bias, outlier_scale=2) -> None:
         super().__init__()
         self.weight = nn.Parameter(weight.to(torch.float32).data)
         if bias is not None:
@@ -50,11 +51,12 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
         else:
             self.bias = None
         self.printed = False
-        self.outliers = None
+        self.outlier_mask = None
+        self.outlier_scale = outlier_scale
+        self.binary_scale = None
 
-    def binarize_except_outliers(self):
-        if self.outliers is None:
-            print(self.outliers)
+    def gen_outlier_mask(self):
+        with torch.no_grad():
             w = self.weight
             w_flat = w.view(-1)
             # lower_threshold, upper_threshold = torch.quantile(w_flat, torch.tensor([0.01, 0.99]).to(w.device))
@@ -65,28 +67,29 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
             upper_threshold = mean + 1.65 * std  # 1.96 : 95%,
 
             outliers = (w < lower_threshold) | (w > upper_threshold)
-            self.outliers = outliers
+            print(
+                f"Generat outlier_mask, outlier_fraction: {outliers.sum()}/{outliers.numel()}"
+            )
+            self.outlier_mask = outliers.detach()
+            self.binary_scale = (
+                w[~self.outlier_mask].abs().mean(-1).view(-1, 1).detach()
+            )
+
+    def binarize_except_outliers(self):
+        if self.outlier_mask is None:
+            self.gen_outlier_mask()
+
         # if self.printed is not True:
         #     print(outliers.sum()/outliers.numel())
         #     self.printed = True
 
-        w = self.weight
-        w_bin = w.clone()
-        scaling_factor = w[~self.outliers].abs().mean(-1).view(-1, 1).detach()
-        # print(scaling_factor.shape)
-
-        # w = STEBinary().apply(w)
-        w_bin[self.outliers] = w[self.outliers] * 2
-        w_bin[~self.outliers] = STEBinary().apply(w[~self.outliers])
-        w_bin[~self.outliers] = w[~self.outliers] * scaling_factor
-
-        # with torch.no_grad():
-        #     w_bin.grad[outliers] = 0.
-
-        return w_bin
+        scaled_weight = self.weight * self.outlier_scale
+        binary_weight = STEBinary().apply(self.weight) * self.binary_scale
+        w_sim = torch.where(self.outlier_mask, scaled_weight, binary_weight)
+        return w_sim
 
     def forward(self, x):
         # w = STEBinary().apply(self.weight)
-        w = self.binarize_except_outliers()
+        w = checkpoint(self.binarize_except_outliers)
         output = F.linear(x, w, self.bias)
         return output
