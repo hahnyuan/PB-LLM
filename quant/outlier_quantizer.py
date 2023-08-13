@@ -68,7 +68,7 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
 
             outliers = (w < lower_threshold) | (w > upper_threshold)
             print(
-                f"Generat outlier_mask, outlier_fraction: {outliers.sum()}/{outliers.numel()}"
+                f"Generat outlier_mask, outlier_fraction: {outliers.sum()}/{outliers.numel()}({outliers.sum()/outliers.numel()})"
             )
             self.outlier_mask = outliers.detach()
             self.binary_scale = (
@@ -82,7 +82,10 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
         # if self.printed is not True:
         #     print(outliers.sum()/outliers.numel())
         #     self.printed = True
-
+        if self.training:
+            self.binary_scale = (
+                self.weight[~self.outlier_mask].abs().mean(-1).view(-1, 1).detach()
+            )
         scaled_weight = self.weight * self.outlier_scale
         binary_weight = STEBinary().apply(self.weight) * self.binary_scale
         w_sim = torch.where(self.outlier_mask, scaled_weight, binary_weight)
