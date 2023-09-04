@@ -349,3 +349,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args)
+'''
+CUDA_VISIBLE_DEVICES='5' XDG_CACHE_HOME='/data/shangyuzhang/' python experiments/column_quant_frozen_outliers.py --binarization_method=xnor_outlier --model_save_dir "./checkpoints/openllama-7b-0" --granularity=whole_model --model_id=openlm-research/open_llama_7b --train_step=0 --dataset=red_pajama
+'''
