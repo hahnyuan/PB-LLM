@@ -2,6 +2,7 @@ import os
 import numpy as np
 import torch
 from datasets import load_dataset
+import random
 
 """
 doc https://huggingface.co/docs/datasets/loading
@@ -29,21 +30,24 @@ def get_redpajama_train(tokenizer, percent=10, seed=3, batch_size=128, max_lengt
     )
     return processed_dataset
 
-def get_english_quote(dataset_name,tokenizer):
+
+def get_english_quote(dataset_name, tokenizer):
     data = load_dataset(dataset_name)
     data = data.map(lambda samples: tokenizer(samples["quote"]), batched=True)
     return data["train"]
 
-def get_qat_dataset(name,tokenizer,data_percent):
+
+def get_qat_dataset(name, tokenizer, data_percent):
     if name == "red_pajama":
         data = get_redpajama_train(tokenizer, data_percent)
-        
+
     elif name == "Abirate/english_quotes":
-        data=get_english_quote(name,tokenizer)
+        data = get_english_quote(name, tokenizer)
     else:
         raise NotImplementedError
     data = data.shuffle()
     return data
+
 
 def get_wikitext2(nsamples, seed, seqlen, model, cache_dir):
     print("get_wikitext2")
@@ -73,8 +77,6 @@ def get_wikitext2(nsamples, seed, seqlen, model, cache_dir):
 
     trainenc = tokenizer("\n\n".join(traindata["text"]), return_tensors="pt")
     testenc = tokenizer("\n\n".join(testdata["text"]), return_tensors="pt")
-
-    import random
 
     random.seed(seed)
     trainloader = []
@@ -131,9 +133,40 @@ def get_ptb(nsamples, seed, seqlen, model, cache_dir):
     return trainloader, testenc
 
 
+def get_ptq_calib_data(name, tokenizer, nsamples, seqlen=2048, seed=3):
+    print(f" get_ptq_calib_data {name}, nsamples={nsamples}, seqlen={seqlen}, {seed}")
+    cache_file = f"cache/{name}_{nsamples}_{seqlen}_{seed}.pt"
+    if not os.path.exists("cache"):
+        os.makedirs("cache")
+    if os.path.exists(cache_file):
+        traindataset = torch.load(cache_file)
+        return traindataset
+    if name == "c4":
+        traindata = load_dataset(
+            "allenai/c4",
+            "allenai--c4",
+            data_files={"train": "en/c4-train.00000-of-01024.json.gz"},
+            split="train",
+        )
+        trainenc = tokenizer("\n\n".join(traindata["text"]), return_tensors="pt")
+    elif name == "wikitext2":
+        traindata = load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
+        trainenc = tokenizer("\n\n".join(traindata["text"]), return_tensors="pt")
+    else:
+        raise NotImplementedError
+    traindataset = []
+    for _ in range(nsamples):
+        i = random.randint(0, trainenc.input_ids.shape[1] - seqlen - 1)
+        j = i + seqlen
+        inp = trainenc.input_ids[:, i:j]
+        attention_mask = torch.ones_like(inp)
+        traindataset.append({"input_ids": inp, "attention_mask": attention_mask})
+    torch.save(traindataset, cache_file)
+    return traindataset
+
+
 def get_c4(nsamples, seed, seqlen, model, cache_dir):
     print("get_c4")
-    from datasets import load_dataset
 
     traindata = load_dataset(
         "allenai/c4",
@@ -218,4 +251,3 @@ def get_loaders(name, nsamples=128, seed=0, seqlen=2048, model="", cache_dir="")
         train = wiki_train + ptb_train + c4_train
         val = None
         return train, val
-    

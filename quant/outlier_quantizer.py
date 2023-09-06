@@ -64,7 +64,7 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
             mean = torch.mean(w_flat).to(w.device)
             std = torch.std(w_flat).to(w.device)
             lower_threshold = mean - 0.68 * std  # 1.65 : 90%
-            upper_threshold = mean + 0.68 * std  # 1.96 : 95%, 2.32 : 98%, 
+            upper_threshold = mean + 0.68 * std  # 1.96 : 95%, 2.32 : 98%,
 
             outliers = (w < lower_threshold) | (w > upper_threshold)
             print(

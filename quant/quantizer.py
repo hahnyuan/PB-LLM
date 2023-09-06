@@ -178,11 +178,11 @@ class XnorBinaryLinear(nn.Module, BinaryInterface):
         else:
             self.bias = None
 
-    def quant_weight(self):
+    def quant_weight(self, outlier_mask=None):
         w = self.weight
-        # #centeralization
-        # w = w - w.mean(-1).view(-1, 1)
-        w = w - w.mean(-1).view(-1, 1)
+        w = w - w.mean(-1).view(-1, 1)  # oc, ic
+        if outlier_mask is not None:
+            w = w * (~outlier_mask)
         scaling_factor = w.abs().mean(-1).view(-1, 1).detach()
         w = STEBinary().apply(w)
         w = w * scaling_factor
