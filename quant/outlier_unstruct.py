@@ -36,6 +36,13 @@ class OutliersQLinearUnstruct(nn.Module, BinaryInterface):
             torch.zeros(weight.shape, dtype=torch.bool),
         )
         self.outlier_metric = outlier_metric
+        self.H_diag = None
+
+    def add_batch(self, x):
+        if self.outlier_metric == "hessain":
+            if self.H_diag is None:
+                self.H_diag = torch.zeros(x.shape[1], device=x.device)
+            self.H_diag += (x**2).mean([0, 1])
 
     def outlier_calibration(self, x=None):
         with torch.no_grad():
