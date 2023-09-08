@@ -5,7 +5,7 @@ import argparse
 import os
 import torch
 import torch.nn as nn
-
+import copy 
 # from transformers import (
 #     AutoModelForCausalLM,
 #     AutoTokenizer,
@@ -48,6 +48,7 @@ from evaluate import evaluate_model
 """
 Usage
 python bnn_train_layerwise.py --binarization_method xnor --debug
+CUDA_VISIBLE_DEVICES='4,5' XDG_CACHE_HOME='/data/shangyuzhang/' python experiments/column_quant.py --binarization_method=xnor_outlier --model_save_dir "./checkpoints/openllama-3b-9-oldversion" --granularity=whole_model --model_id=openlm-research/open_llama_3b --train_step=2000 --dataset=red_pajama
 """
 
 from transformers import get_cosine_with_hard_restarts_schedule_with_warmup
@@ -65,6 +66,7 @@ def replace_qlinear(root_module, name_prefix=""):
     module_name_dict = {name: module for name, module in root_module.named_modules()}
     for name, module in module_name_dict.items():
         if isinstance(module, nn.Linear):
+            print(name)
             ind = name.rfind(".")
             if ind == -1:
                 father = module_name_dict[""]
@@ -125,10 +127,11 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
         if args.train_steps:
             training_args = TrainingArguments(
                 per_device_train_batch_size=1,
-                gradient_accumulation_steps=4,
-                warmup_steps=200,
+                gradient_accumulation_steps=1,
+                warmup_steps=args.train_steps*0.05,
                 max_steps=args.train_steps,
                 learning_rate=1e-4,
+                lr_scheduler_type="cosine",
                 fp16=False,
                 logging_steps=1,
                 output_dir="outputs",
@@ -174,8 +177,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
             + f"/{args.granularity}/{args.model_id.replace('/','_')}_o{args.outlier_fraction}_{module_name}",
         )
 
-        model.eval()
-        evaluate_model(model, tokenizer, args.model_id, 'piqa,boolq', limit=-1)
+        evaluate_model(model, tokenizer, args.model_id, 'llmqat', limit=200)
 
 
 
@@ -214,11 +216,23 @@ def main(args):
             if isinstance(module, nn.Linear):
                 ordered_name_modules.append((name, module))
     elif args.granularity == "whole_model":
-        # ordered_name_modules = {name: module for name, module in model.named_modules()}
         ordered_name_modules = [("whole_model", model)]
+        # ordered_name_modules = [('whole_model', _) for i, _ in enumerate(model.base_model.layers) if i != 0 and i != 25]
+        # print(ordered_name_modules)
     else:
         raise NotImplementedError
+
+    initial_state_dict = copy.deepcopy(model.state_dict())
+
     iterative_train(model, ordered_name_modules, data, tokenizer)
+
+    updated_state_dict = model.state_dict()
+    for (layer_name, initial_param), (_, updated_param) in zip(initial_state_dict.items(), updated_state_dict.items()):
+        if not torch.equal(initial_param, updated_param):
+            print(f"{layer_name} has been updated.")
+        else:
+            print(f"{layer_name} has NOT been updated.")
+
 
 
 if __name__ == "__main__":
