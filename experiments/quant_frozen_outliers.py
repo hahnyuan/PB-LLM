@@ -130,9 +130,9 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
                 gradient_accumulation_steps=1,
                 warmup_steps=args.train_steps*0.05,
                 max_steps=args.train_steps,
-                learning_rate=1e-2,
+                learning_rate=1e-4,
                 fp16=False,
-                logging_steps=1,
+                logging_steps=10,
                 output_dir="outputs",
                 optim="adamw_torch",
                 report_to="tensorboard",
@@ -140,17 +140,15 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
 
             # Create trainer
             class Trainer_frozen_outliers(Trainer):
-                def __init__(self, *args, teacher_model=None, **kwargs):
+                def __init__(self, *args, **kwargs):
                     super().__init__(*args, **kwargs)
 
-                    self.teacher = teacher_model
 
                 def apply_mask_to_linear(self, layer):
                     if isinstance(layer, BinaryXnorExceptOutliersLinear):
                         # print('find BinaryXnorExceptOutliersLinear')
                         if layer.outlier_mask is not None and layer.weight.grad is not None:
-                            # print(layer.outlier_mask)
-                            layer.weight.grad[layer.outlier_mask]=0
+                            layer.weight.grad[layer.outlier_mask]*=0
                             # layer.weight.grad *= layer.outlier_mask
                         # if layer.bias is not None:
                         #     layer.bias.grad *= mask
@@ -223,7 +221,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
                 param.requires_grad = False
 
         print_memory_usage()
-        model.eval()
+        # model.eval()
         # result = evaluate_model(
         #     model, tokenizer, args.model_id, "piqa,boolq", limit=100
         # )
@@ -234,15 +232,17 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
         #     f.write(
         #         f"{args.model_id}: {args.binarization_method} {args.outlier_fraction} {args.train_steps} {args.dataset} {module_name} {boolq} {piqa}\n"
         #     )
-
+        # evaluate_model(model, tokenizer, args.model_id, 'llmqat', limit=200)
         save_bnn(
             model,
             args.model_save_dir
             + f"/{args.granularity}/{args.model_id.replace('/','_')}_o{args.outlier_fraction}_{module_name}",
         )
 
-        model.eval()
-        evaluate_model(model, tokenizer, args.model_id, 'piqa,boolq', limit=200)
+    # model.eval()
+    evaluate_model(model, tokenizer, args.model_id, 'llmqat', limit=200)
+    # evaluate_model(model, tokenizer, args.model_id, 'boolq,piqa', limit=200)
+
 
 
 
@@ -349,6 +349,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args)
+
+
 '''
-CUDA_VISIBLE_DEVICES='5' XDG_CACHE_HOME='/data/shangyuzhang/' python experiments/quant_frozen_outliers.py --binarization_method=xnor_outlier --model_save_dir "./checkpoints/openllama-7b-0" --granularity=whole_model --model_id=openlm-research/open_llama_7b --train_step=0 --dataset=red_pajama
+CUDA_VISIBLE_DEVICES='0' XDG_CACHE_HOME='/data/shangyuzhang/' python experiments/column_quant_frozen_outliers.py --binarization_method=xnor_outlier --model_save_dir "./checkpoints/openllama-7b-0" --granularity=whole_model --model_id=openlm-research/open_llama_7b --train_step=1000 --dataset=red_pajama
 '''
