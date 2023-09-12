@@ -1,15 +1,18 @@
 import torch.nn as nn
 import torch
 from .quantizer import Quantizer
+from .binary_quantizer import BinaryQuantizer
 
 class LowHighQuantizer(nn.Module):
-    def __init__(self, high_percent, low_bit,high_bit,perchannel,sym,low_mse,high_mse) -> None:
+    def __init__(self, high_percent, low_bit,binary_method,high_bit,perchannel,high_sym,high_mse) -> None:
         super().__init__()
         self.high_percent=high_percent
-        self.low_quantizer=Quantizer()
-        self.low_quantizer.configure(low_bit,perchannel,sym,low_mse)
+        if low_bit==1:
+            self.low_quantizer=BinaryQuantizer(binary_method)
+        else:
+            raise NotImplementedError()
         self.high_quantizer=Quantizer()
-        self.high_quantizer.configure(high_bit,perchannel,sym,high_mse)
+        self.high_quantizer.configure(high_bit,perchannel,high_sym,high_mse)
 
     def gen_low_mask(self,x):
         high_num=int(x.numel()*self.high_percent)
@@ -44,10 +47,10 @@ class LowHighQuantizer(nn.Module):
     
     @property
     def scale(self):
-        scale=torch.cat([self.high_quantizer.scale.unsqueeze(-1),self.low_quantizer.scale.unsqueeze(-1)],-1)
+        scale=self.high_quantizer.scale
         return scale
 
     @property
     def zero(self):
-        zero=torch.cat([self.high_quantizer.zero.unsqueeze(-1),self.low_quantizer.zero.unsqueeze(-1)],-1)
+        zero=self.high_quantizer.zero
         return zero

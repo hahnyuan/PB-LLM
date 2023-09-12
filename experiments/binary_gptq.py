@@ -43,7 +43,7 @@ logging.basicConfig(
 )
 
 
-high_percent=0.8
+high_percent=0.5
 pretrained_model_dir = "facebook/opt-1.3b"
 quantized_model_dir = f"output/opt-1.3b-{high_percent}"
 
@@ -65,9 +65,9 @@ low_high_quant_config={
     "high_percent":high_percent,
     "low_bit":1,
     "high_bit":8,
+    "binary_method":"xnor",
     "perchannel":True,
-    "sym":False,
-    "low_mse":True,
+    "high_sym":False,
     "high_mse":False
 }
 
