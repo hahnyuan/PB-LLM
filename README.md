@@ -5,6 +5,17 @@ This project focuses on binary quantization techniques applied to large language
 ## Introduction
 The exponential growth of language models has posed challenges in terms of model size, computational requirements, and energy consumption. Binary quantization offers a promising solution to address these challenges by reducing the memory footprint and improving the inference speed of large language models. This project aims to provide an implementation of binary quantization techniques that can be applied to various popular language models.
 
+## Model support
+
+Huggingface models
+- facebook/opt-125m
+- facebook/opt-1.3b
+- huggyllama/llama-7b
+- huggyllama/llama-13b
+- meta-llama/Llama-2-7b-chat-hf
+- meta-llama/Llama-2-13b-chat-hf
+- openchat/openchat_v3.2
+
 ## Usage
 
 ### Enviroment Setting
