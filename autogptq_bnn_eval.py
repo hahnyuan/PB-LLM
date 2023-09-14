@@ -44,11 +44,18 @@ def main(args):
         desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
-    model = AutoGPTQForCausalLM.from_quantized(args.checkpoint, quantize_config,use_low_high=True)
+    if args.checkpoint=="":
+        print(f"use raw net {args.model_id}")
+        model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
+    else:
+        model = AutoGPTQForCausalLM.from_quantized(args.checkpoint, quantize_config,use_low_high=True)
 
     model = prepare_model_for_eval(model)
 
-    # generate_sample_test(model,tokenizer)
+    from auto_gptq.utils import Perplexity
+    ppl = Perplexity(model, tokenizer, 'wikitext')
+    scores=ppl.calculate_perplexity(early_exit=20)
+    print(f"PPL: {scores}")
 
     results = evaluate_model(
         model,
@@ -76,8 +83,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_id",
         type=str,
-        default="huggyllama/llama-7b",
-        help="Pretrained model ID, huggyllama/llama-7b, openlm-research/open_llama_7b",
+        default="facebook/opt-1.3b",
+        help="Pretrained model ID",
     )
     parser.add_argument(
         "--checkpoint",

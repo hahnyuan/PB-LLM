@@ -44,8 +44,12 @@ logging.basicConfig(
 
 
 high_percent=0.5
-pretrained_model_dir = "facebook/opt-1.3b"
-quantized_model_dir = f"output/opt-1.3b-{high_percent}"
+model="facebook/opt-2.7b"
+# model="facebook/opt-125m"
+pretrained_model_dir = model
+quantized_model_dir = f"output/{model}-{high_percent}"
+if not os.path.exists(quantized_model_dir):
+    os.makedirs(quantized_model_dir)
 
 # tokenizer = AutoTokenizer.from_pretrained(pretrained_model_dir, use_fast=True)
 tokenizer = AutoTokenizer.from_pretrained(pretrained_model_dir)
@@ -113,3 +117,10 @@ print(tokenizer.decode(model.generate(**tokenizer("auto_gptq is", return_tensors
 # or you can also use pipeline
 pipeline = TextGenerationPipeline(model=model, tokenizer=tokenizer)
 print(pipeline("auto-gptq is")[0]["generated_text"])
+
+model=model.half()
+# test perplexity
+from auto_gptq.utils import Perplexity
+ppl = Perplexity(model, tokenizer, 'wikitext')
+scores=ppl.calculate_perplexity(early_exit=20)
+print(f"PPL: {scores}")
