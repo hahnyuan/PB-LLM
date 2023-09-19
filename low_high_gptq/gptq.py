@@ -6,6 +6,7 @@ import torch.nn as nn
 import transformers
 
 DEBUG = False 
+# DEBUG = True
 
 torch.backends.cuda.matmul.allow_tf32 = False
 torch.backends.cudnn.allow_tf32 = False
@@ -43,6 +44,7 @@ class LowHighGPT:
         self.nsamples += tmp
         inp = math.sqrt(2 / self.nsamples) * inp.float()
         self.H += inp.matmul(inp.t())
+        # breakpoint()
 
     def fasterquant(
         self, low_frac, blocksize=128, percdamp=.01
@@ -117,6 +119,7 @@ class LowHighGPT:
 
                 Q1[:, i] = q
                 Losses1[:, i] = (w - q) ** 2 / d ** 2
+                # breakpoint()
 
                 err1 = (w - q) / d
                 W1[:, i:] -= err1.unsqueeze(1).matmul(Hinv1[i, i:].unsqueeze(0))
@@ -132,6 +135,7 @@ class LowHighGPT:
                 self.layer.weight.data[:, col_ed:] = W[:, col_ed:]
                 print(torch.sum((self.layer(self.inp1) - self.out1) ** 2))
                 print(torch.sum(Losses))
+            
 
         torch.cuda.synchronize()
         print('time %.2f' % (time.time() - tick))
@@ -142,6 +146,7 @@ class LowHighGPT:
         self.layer.weight.data = W.reshape(self.layer.weight.shape).to(self.layer.weight.data.dtype)
         if DEBUG:
             print(torch.sum((self.layer(self.inp1) - self.out1) ** 2))
+        return {"error":torch.sum(Losses).item()}
 
     def free(self):
         if DEBUG:

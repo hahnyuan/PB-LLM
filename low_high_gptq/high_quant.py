@@ -110,7 +110,7 @@ class HighQuantizer(nn.Module):
             self.scale = self.scale.unsqueeze(0)
             self.zero = self.zero.unsqueeze(0)
 
-    def quantize(self, x):
+    def quantize(self, x, blocki=None):
         if self.ready():
             return quantize(x, self.scale, self.zero, self.maxq)
         return x

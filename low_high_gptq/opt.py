@@ -74,7 +74,8 @@ def opt_sequential(model, dataloader, dev):
     attention_mask = cache['attention_mask']
 
     print('Ready.')
-
+    plt_x=[]
+    plt_error=[]
     for i in range(len(layers)):
         layer = layers[i].to(dev)
 
@@ -85,9 +86,12 @@ def opt_sequential(model, dataloader, dev):
             if (not (args.minlayer <= i < args.maxlayer and args.quant_only in name)) == (not args.invert):
               continue
             # TODO block is not group
-            low_quantizer=LowQuantizer(subset[name].weight,method="xnor", groupsize=args.blocksize)
+            # low_quantizer=LowQuantizer(subset[name].weight,method="xnor", groupsize=args.blocksize)
+            low_quantizer=LowQuantizer(subset[name].weight,method=args.low_quant_method, groupsize=args.blocksize)
+            # low_quantizer=LowQuantizer(subset[name].weight,method="no", groupsize=args.blocksize)
+            # low_quantizer=LowQuantizer(subset[name].weight,method="sign", groupsize=args.blocksize)
             # TODO parse params
-            high_quantizer=HighQuantizer(8,True,False,False)
+            high_quantizer=HighQuantizer(args.high_bit,True,False,False,)
             gpts[name] = LowHighGPT(subset[name],low_quantizer,high_quantizer)
 
         def add_batch(name):
@@ -105,10 +109,13 @@ def opt_sequential(model, dataloader, dev):
         for name in gpts:
             print(i, name)
             print('Quantizing ...')
-            gpts[name].fasterquant(
+            info=gpts[name].fasterquant(
                 args.low_frac, percdamp=args.percdamp, blocksize=args.blocksize
             )
             gpts[name].free()
+            plt_x.append(f"{i}_{name}")
+            plt_error.append(info["error"])
+
 
         for j in range(args.nsamples):
             outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
@@ -118,6 +125,14 @@ def opt_sequential(model, dataloader, dev):
         torch.cuda.empty_cache()
 
         inps, outs = outs, inps
+    if args.plot:
+        title=f"{args.model}_{args.dataset}_{args.low_quant_method}_{args.low_frac}_{args.high_bit}"
+        torch.save([plt_x,plt_error],"../output/"+title.replace("/","_")+'.pkl')
+        import matplotlib.pyplot as plt
+        plt.plot(plt_error)
+        plt.xticks(range(1,len(plt_x)+1),plt_x)
+        plt.title(title)
+        plt.savefig("../output/"+title.replace("/","_")+'.jpg')
 
     model.config.use_cache = use_cache
 
@@ -180,13 +195,6 @@ def opt_eval(model, testenc, dev, dataset: str, log_wandb: bool = False):
         print(i)
         layer = layers[i].to(dev)
 
-        if args.gmp:
-            subset = find_layers(layer)
-            for name in subset:
-                W = subset[name].weight.data
-                thresh = torch.sort(torch.abs(W.flatten()))[0][int(W.numel() * args.sparsity)]
-                W.data[torch.abs(W.data) <= thresh] = 0
-
         for j in range(nsamples):
             outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask)[0]
         layers[i] = layer.cpu()
@@ -232,12 +240,17 @@ if __name__ == '__main__':
 
     parser.add_argument(
         'model', type=str, 
-        help='OPT model to load; pass `facebook/opt-X`.'
+        help='OPT model to load; pass `facebook/opt-125m`.'
     )
     parser.add_argument(
         'dataset', type=str, choices=['wikitext2', 'ptb', 'c4'],
         help='Where to extract calibration data from.'
     )
+    parser.add_argument(
+        'low_quant_method',
+        type=str, choices=['xnor', 'sign', 'no',"2bit","4bit","prune"],
+    )
+    parser.add_argument("--plot",action="store_true")
     parser.add_argument(
         '--seed',
         type=int, default=0, help='Seed for sampling the calibration data.'
@@ -259,7 +272,7 @@ if __name__ == '__main__':
         help='Blocksize to use for adaptive mask selection.'
     )
     parser.add_argument(
-        '--wbits', type=int, default=16,
+        '--high_bit', type=int, default=8,
         help='Whether to quantize as well.'
     )
     parser.add_argument(
@@ -306,7 +319,8 @@ if __name__ == '__main__':
                 break
         print(time.time() - tick)
 
-    for dataset in ['wikitext2', 'ptb', 'c4']:
+    # for dataset in ['wikitext2', 'ptb', 'c4']:
+    for dataset in ['wikitext2']:
         dataloader, testloader = get_loaders(
             dataset, seed=args.seed, model=args.model, seqlen=model.seqlen
         )

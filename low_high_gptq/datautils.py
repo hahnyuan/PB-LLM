@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from datasets import load_dataset
 from transformers import AutoTokenizer, LlamaTokenizer
+import os
 
 
 def set_seed(seed):
@@ -61,6 +62,10 @@ def get_ptb(nsamples, seed, seqlen, model, tokenizer):
         trainloader.append((inp, tar))
     return trainloader, testenc
 
+class TokenizerWrapper:
+    def __init__(self, input_ids):
+        self.input_ids = input_ids
+
 def get_c4(nsamples, seed, seqlen, model, tokenizer):
     traindata = load_dataset(
         'allenai/c4', 'allenai--c4', data_files={'train': 'en/c4-train.00000-of-01024.json.gz'}, split='train'
@@ -87,18 +92,29 @@ def get_c4(nsamples, seed, seqlen, model, tokenizer):
     valenc = tokenizer(' '.join(valdata[:1100]['text']), return_tensors='pt')
     valenc = valenc.input_ids[:, :(256 * seqlen)]
 
-    class TokenizerWrapper:
-        def __init__(self, input_ids):
-            self.input_ids = input_ids
+    
     valenc = TokenizerWrapper(valenc)
 
     return trainloader, valenc
 
 def get_loaders(name, nsamples=128, seed=0, seqlen=2048, model=''):
+    cache_file=f'cache/{name}_{nsamples}_{seed}_{seqlen}_{model}.pt'
+    try:
+        return torch.load(cache_file)
+    except:
+        pass
+
     tokenizer = get_tokenizer(model)
+    
     if 'wikitext2' in name:
-        return get_wikitext2(nsamples, seed, seqlen, model, tokenizer)
+        loaders= get_wikitext2(nsamples, seed, seqlen, model, tokenizer)
     if 'ptb' in name:
-        return get_ptb(nsamples, seed, seqlen, model, tokenizer)
+        loaders= get_ptb(nsamples, seed, seqlen, model, tokenizer)
     if 'c4' in name:
-        return get_c4(nsamples, seed, seqlen, model, tokenizer)
+        loaders= get_c4(nsamples, seed, seqlen, model, tokenizer)
+    directory='/'.join(cache_file.split('/')[:-1])
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    torch.save(loaders,cache_file)
+    return loaders
