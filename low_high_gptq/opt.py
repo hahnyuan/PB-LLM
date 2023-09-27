@@ -8,7 +8,37 @@ from high_quant import HighQuantizer
 from low_quant import LowQuantizer
 from modelutils import find_layers
 
+# python opt.py huggyllama/llama-7b c4 xnor --low_frac 0.5 --high_bit 8 --plot
+# python opt.py facebook/opt-125m c4 xnor --low_frac 0.5 --high_bit 8 --plot
+# python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8
+# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8
+# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8
+# python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8
 
+# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8
+# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8
+# CUDA_VISIBLE_DEVICES=2 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8
+# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8
+
+# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8  --salient_metric hessian
+# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8 --salient_metric hessian
+# CUDA_VISIBLE_DEVICES=2 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8 --salient_metric hessian
+# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8 --salient_metric hessian
+
+# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8  --salient_metric hessian --groupsize 128
+# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8 --salient_metric hessian --groupsize 128
+# CUDA_VISIBLE_DEVICES=2 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8 --salient_metric hessian --groupsize 128
+# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8 --salient_metric hessian --groupsize 128
+
+# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8  --groupsize 128
+# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8 --groupsize 128
+# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8 --groupsize 128
+# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8 --groupsize 128
+
+# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8 --disable_gptq
+# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8 --disable_gptq
+# CUDA_VISIBLE_DEVICES=2 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8 --disable_gptq
+# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8 --disable_gptq
 
 def get_model(model):
     import torch
@@ -99,14 +129,9 @@ def quant_sequential(model, dataloader, dev):
         for name in subset:
             if (not (args.minlayer <= i < args.maxlayer and args.quant_only in name)) == (not args.invert):
               continue
-            # TODO block is not group
-            # low_quantizer=LowQuantizer(subset[name].weight,method="xnor", groupsize=args.blocksize)
-            low_quantizer=LowQuantizer(subset[name].weight,method=args.low_quant_method, groupsize=args.blocksize)
-            # low_quantizer=LowQuantizer(subset[name].weight,method="no", groupsize=args.blocksize)
-            # low_quantizer=LowQuantizer(subset[name].weight,method="sign", groupsize=args.blocksize)
-            # TODO parse params
+            low_quantizer=LowQuantizer(subset[name].weight,method=args.low_quant_method, groupsize=args.groupsize)
             high_quantizer=HighQuantizer(args.high_bit,True,False,False,)
-            gpts[name] = LowHighGPT(subset[name],low_quantizer,high_quantizer)
+            gpts[name] = LowHighGPT(subset[name],low_quantizer,high_quantizer, salient_metric=args.salient_metric,disable_gptq=args.disable_gptq)
 
         def add_batch(name):
             def tmp(_, inp, out):
@@ -194,6 +219,11 @@ if __name__ == '__main__':
         help='Blocksize to use for adaptive mask selection.'
     )
     parser.add_argument(
+        '--groupsize', type=int, default=-1,
+        help='Groupsize for GPTQ quantizing'
+    )
+    parser.add_argument("--salient_metric", type=str, default="magnitude", choices=["magnitude","hessian"])
+    parser.add_argument(
         '--high_bit', type=int, default=8,
         help='Whether to quantize as well.'
     )
@@ -216,6 +246,9 @@ if __name__ == '__main__':
     parser.add_argument(
        '--save', type=str, default='',
        help='Path to saved model.'
+    )
+    parser.add_argument(
+       '--disable_gptq', action="store_true",
     )
     parser.add_argument(
        '--log_wandb', action='store_true',
@@ -242,7 +275,8 @@ if __name__ == '__main__':
         print(time.time() - tick)
 
     # for dataset in ['wikitext2', 'ptb', 'c4']:
-    for dataset in ['wikitext2']:
+    for dataset in ['c4']:
+    # for dataset in ['wikitext2']:
         dataloader, testloader = get_loaders(
             dataset, seed=args.seed, model=args.model, seqlen=model.seqlen
         )
@@ -254,5 +288,9 @@ if __name__ == '__main__':
             from eval_ppl_utils import llama_eval
             llama_eval(model, testloader, device, dataset, args.log_wandb)
 
-    if args.save:
-        model.save_pretrained(args.save)
+    save_title=f"{args.model}_{args.dataset}_{args.low_quant_method}_{args.low_frac}_{args.high_bit}_{args.groupsize}_{args.salient_metric}"
+    save_file="../output/"+save_title.replace("/","_")+".pt"
+    save_path=os.path.dirname(save_file)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    model.save_pretrained(save_file)

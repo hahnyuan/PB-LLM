@@ -5,9 +5,12 @@ import math
 
 class LowQuantizer(nn.Module):
 
-    def __init__(self, weight, method="xnor",groupsize=128):
+    def __init__(self, weight, method="xnor",groupsize=-1):
         super().__init__()
         oc,ic=weight.shape
+        if groupsize==-1:
+            groupsize=ic
+        self.groupsize=groupsize
         self.n_groups=math.ceil(ic/groupsize)
         if "bit" in method:
             self.register_buffer('maxq', torch.tensor(1))
@@ -18,7 +21,7 @@ class LowQuantizer(nn.Module):
         self.method=method
 
 
-    def calibrate(self, w, groupi):
+    def calibrate(self, w, mask=None, groupi=0):
         if self.method=="xnor":
             # TODO: seems to have problem
             w_mean = w.mean(-1).view(-1, 1)  # oc, ic(blocksize)
@@ -27,6 +30,7 @@ class LowQuantizer(nn.Module):
             # non_zero_nums = (w != 0).float().sum(-1,keepdim=True)
             # scale = w.abs().sum(-1,keepdim=True)/(non_zero_nums+1e-5)
             scale=w.abs().mean(-1,keepdim=True)
+            # TODO: search mean and scale
         elif self.method=="sign":
             # w_relu=F.relu(w)
             # scale=w_relu.sum()/((w>0).float().sum()+1e-5)
@@ -64,7 +68,7 @@ class LowQuantizer(nn.Module):
         self.scale[groupi]=scale
         self.scale.to(w.device)
 
-    def quantize(self, w,groupi):
+    def quantize(self, w,groupi=0):
         if w.device!=self.scale.device:
             self.scale=self.scale.to(w.device)
             self.mean=self.mean.to(w.device)

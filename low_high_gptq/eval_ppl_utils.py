@@ -3,8 +3,6 @@ import time
 import torch
 import torch.nn as nn
 
-from modelutils import *
-from quant import *
 
 
 @torch.no_grad()
