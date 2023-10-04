@@ -8,7 +8,7 @@ PB-LLM is extended to recover the capacities of quantized LMMs, by analyzing fro
 Under PTQ, combining the concepts from GPTQ, we reconstruct the binarized weight matrix guided by the Hessian matrix and successfully recover the reasoning capacity of PB-LLM in low-bit. 
 Under QAT, we freeze the salient weights during training, explore the derivation of optimal scaling factors crucial for minimizing the quantization error, and propose a scaling mechanism based on this derived scaling strategy for residual binarized weights. 
 Those explorations and the developed methodologies significantly contribute to rejuvenating the performance of low-bit quantized LLMs and present substantial advancements in the field of network binarization for LLMs. 
-The paper is available at [paper](https://arxiv.org/abs/2310.00034).
+The paper is available at [arxiv](https://arxiv.org/abs/2310.00034).
 
 
 ## Model support
