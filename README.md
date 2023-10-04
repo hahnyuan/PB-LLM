@@ -1,9 +1,15 @@
 # Binary Quantization for Large Language Models
 
-This project focuses on binary quantization techniques applied to large language models. Binary quantization is a process of reducing the memory footprint and computational complexity of neural networks by representing weights and activations as binary values (-1 or +1) instead of traditional floating-point numbers. This technique has gained significant attention in the field of deep learning due to its potential to improve efficiency and enable deployment on resource-constrained devices.
+This work explores network binarization, a radical form of quantization, compressing model weights to a single bit, specifically for Large Language Models (LLMs) compression. 
+Due to previous binarization methods collapsing LLMs, we propose a novel approach, Partially-Binarized LLM (PB-LLM), which can achieve extreme low-bit quantization while maintaining the linguistic reasoning capacity of quantized LLMs. 
+Specifically, our exploration first uncovers the ineffectiveness of naïve applications of existing binarization algorithms and highlights the imperative role of salient weights in achieving low-bit quantization. 
+Thus, PB-LLM filters a small ratio of salient weights during binarization, allocating them to higher-bit storage, i.e. partially-binarization. 
+PB-LLM is extended to recover the capacities of quantized LMMs, by analyzing from the perspective of post-training quantization (PTQ) and quantization-aware training (QAT). 
+Under PTQ, combining the concepts from GPTQ, we reconstruct the binarized weight matrix guided by the Hessian matrix and successfully recover the reasoning capacity of PB-LLM in low-bit. 
+Under QAT, we freeze the salient weights during training, explore the derivation of optimal scaling factors crucial for minimizing the quantization error, and propose a scaling mechanism based on this derived scaling strategy for residual binarized weights. 
+Those explorations and the developed methodologies significantly contribute to rejuvenating the performance of low-bit quantized LLMs and present substantial advancements in the field of network binarization for LLMs. 
+The paper is available at [paper](https://arxiv.org/abs/2310.00034).
 
-## Introduction
-The exponential growth of language models has posed challenges in terms of model size, computational requirements, and energy consumption. Binary quantization offers a promising solution to address these challenges by reducing the memory footprint and improving the inference speed of large language models. This project aims to provide an implementation of binary quantization techniques that can be applied to various popular language models.
 
 ## Model support
 
