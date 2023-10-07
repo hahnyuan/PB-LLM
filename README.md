@@ -67,19 +67,4 @@ CUDA_VISIBLE_DEVICES=0 python run.py huggyllama/llama-7b c4 xnor --low_frac 0.95
 
 ### QAT
 
-Run the script with the desired arguments:
-
-```shell
-python train_model.py --model_id <pretrained_model_id> --dataset <dataset_name> [--debug]
-```
-
-Arguments:
-- model_id: Pretrained model ID (default: "facebook/opt-350m")
-- dataset: Dataset name (default: "Abirate/english_quotes")
-- debug: Enable debug mode (optional)
-
-Example: binarizing via Xnor algorithm with the guidance of KD.
-
-```shell
-CUDA_VISIBLE_DEVICES=5 python bnn_train_layerwise_w_KD.py --binarization_method='xnor' 
-```
+Readme is writting, coming soon.
