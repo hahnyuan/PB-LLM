@@ -67,4 +67,14 @@ CUDA_VISIBLE_DEVICES=0 python run.py huggyllama/llama-7b c4 xnor --low_frac 0.95
 
 ### QAT
 
-Readme is writting, coming soon.
+The QAT for PB-LLM is implemented in the [experiments](experiments) folder.
+
+For example
+
+```shell
+cd gptq_pb
+# for opt-1.3b
+CUDA_VISIBLE_DEVICES='4,5' XDG_CACHE_HOME='/data/shangyuzhang/' python experiments/column_quant.py --binarization_method=xnor_outlier --model_save_dir "./checkpoints/opt1.3b" --granularity=whole_model --model_id=facebook/opt-1.3b --train_step=2000 --dataset=red_pajama
+```
+
+It will automatically evaluated on 7 zero-shot QA tasks. 
