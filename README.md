@@ -72,7 +72,6 @@ The QAT for PB-LLM is implemented in the [experiments](experiments) folder.
 For example
 
 ```shell
-cd gptq_pb
 # for opt-1.3b
 CUDA_VISIBLE_DEVICES='4,5' XDG_CACHE_HOME='/data/shangyuzhang/' python experiments/column_quant_frozen_outliers.py --binarization_method=xnor_outlier --model_save_dir "./checkpoints/opt1.3b" --granularity=whole_model --model_id=facebook/opt-1.3b --train_step=2000 --dataset=red_pajama
 ```
