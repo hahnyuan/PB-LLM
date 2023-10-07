@@ -5,8 +5,7 @@ import argparse
 import os
 import torch
 import torch.nn as nn
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
-
+import copy 
 # from transformers import (
 #     AutoModelForCausalLM,
 #     AutoTokenizer,
@@ -18,6 +17,7 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     DataCollatorForLanguageModeling,
+    default_data_collator, 
     TrainingArguments,
     Trainer,
     LlamaTokenizer,
@@ -35,6 +35,7 @@ from quant import (
     BiRealLinear,
     OutliersQLinearColumn,
     BinaryXnorExceptOutliersLinear,
+    LowbitQuantizeLinear,
 )
 
 # , FdaBinaryLinear
@@ -49,6 +50,7 @@ from evaluate import evaluate_model
 """
 Usage
 python bnn_train_layerwise.py --binarization_method xnor --debug
+CUDA_VISIBLE_DEVICES='4,5' XDG_CACHE_HOME='/data/shangyuzhang/' python experiments/column_quant.py --binarization_method=xnor_outlier --model_save_dir "./checkpoints/openllama-3b-9-oldversion" --granularity=whole_model --model_id=openlm-research/open_llama_3b --train_step=2000 --dataset=red_pajama
 """
 
 from transformers import get_cosine_with_hard_restarts_schedule_with_warmup
@@ -83,6 +85,8 @@ def replace_qlinear(root_module, name_prefix=""):
                 quant_cls = FdaBinaryLinear
             elif "bireal" in args.binarization_method:
                 quant_cls = BiRealLinear
+            elif 'lowbit_quant' in args.binarization_method:
+                quant_cls = LowbitQuantizeLinear
             else:
                 print(f"not supported binarization method {args.binarization_method}")
                 raise NotImplementedError
@@ -107,6 +111,8 @@ def replace_qlinear(root_module, name_prefix=""):
             #     )
             elif "outlier" in args.binarization_method:
                 qlinear = BinaryXnorExceptOutliersLinear(module.weight, module.bias)
+            elif 'lowbit_quant' in args.binarization_method:
+                qlinear = LowbitQuantizeLinear(module.weight, None, w_bits=4)
             else:
                 qlinear = quant_cls(module.weight, module.bias)
 
@@ -118,7 +124,6 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
     """
     ordered_name_modules: [(name, module), ...]
     """
-
     for module_name, module in ordered_name_modules:
         print_trainable_parameters(model)
         replace_qlinear(module, f"{module_name}.")
@@ -131,82 +136,21 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
                 warmup_steps=args.train_steps*0.05,
                 max_steps=args.train_steps,
                 learning_rate=1e-4,
+                lr_scheduler_type="cosine",
                 fp16=False,
-                logging_steps=10,
+                logging_steps=1,
                 output_dir="outputs",
                 optim="adamw_torch",
                 report_to="tensorboard",
             )
 
             # Create trainer
-            class Trainer_frozen_outliers(Trainer):
-                def __init__(self, *args, **kwargs):
-                    super().__init__(*args, **kwargs)
-
-
-                def apply_mask_to_linear(self, layer):
-                    if isinstance(layer, BinaryXnorExceptOutliersLinear):
-                        # print('find BinaryXnorExceptOutliersLinear')
-                        if layer.outlier_mask is not None and layer.weight.grad is not None:
-                            layer.weight.grad[layer.outlier_mask]*=0
-                            # layer.weight.grad *= layer.outlier_mask
-                        # if layer.bias is not None:
-                        #     layer.bias.grad *= mask
-
-                def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
-                    """
-                    Perform a training step on a batch of inputs.
-
-                    Subclass and override to inject custom behavior.
-
-                    Args:
-                        model (`nn.Module`):
-                            The model to train.
-                        inputs (`Dict[str, Union[torch.Tensor, Any]]`):
-                            The inputs and targets of the model.
-
-                            The dictionary will be unpacked before being fed to the model. Most models expect the targets under the
-                            argument `labels`. Check your model's documentation for all accepted arguments.
-
-                    Return:
-                        `torch.Tensor`: The tensor with training loss on this batch.
-                    """
-                    model.train()
-                    inputs = self._prepare_inputs(inputs)
-
-                    # if is_sagemaker_mp_enabled():
-                    #     loss_mb = smp_forward_backward(model, inputs, self.args.gradient_accumulation_steps)
-                    #     return loss_mb.reduce_mean().detach().to(self.args.device)
-
-                    with self.compute_loss_context_manager():
-                        loss = self.compute_loss(model, inputs)
-
-                    if self.args.n_gpu > 1:
-                        loss = loss.mean()  # mean() to average on multi-gpu parallel training
-
-                    if self.do_grad_scaling:
-                        self.scaler.scale(loss).backward()
-                    elif self.use_apex:
-                        with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                            scaled_loss.backward()
-                    else:
-                        self.accelerator.backward(loss)
-                    
-                    for module in model.modules():
-                        self.apply_mask_to_linear(module)
-
-                    return loss.detach() / self.args.gradient_accumulation_steps
-
-            model.config.use_cache = (
-                False  # silence the warnings. Please re-enable for inference!
-            )
-
-         # Create trainer
-            trainer = Trainer_frozen_outliers(
+            trainer = Trainer(
                 model=model,
                 train_dataset=data,
                 args=training_args,
                 data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+                # data_collator=default_data_collator,
                 # lr_scheduler=get_scheduler(args.train_steps)
             )
 
@@ -221,7 +165,7 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
                 param.requires_grad = False
 
         print_memory_usage()
-        # model.eval()
+        model.eval()
         # result = evaluate_model(
         #     model, tokenizer, args.model_id, "piqa,boolq", limit=100
         # )
@@ -232,17 +176,14 @@ def iterative_train(model, ordered_name_modules, data, tokenizer):
         #     f.write(
         #         f"{args.model_id}: {args.binarization_method} {args.outlier_fraction} {args.train_steps} {args.dataset} {module_name} {boolq} {piqa}\n"
         #     )
-        # evaluate_model(model, tokenizer, args.model_id, 'llmqat', limit=200)
+        
         save_bnn(
             model,
             args.model_save_dir
             + f"/{args.granularity}/{args.model_id.replace('/','_')}_o{args.outlier_fraction}_{module_name}",
         )
 
-    # model.eval()
-    evaluate_model(model, tokenizer, args.model_id, 'llmqat', limit=200)
-    # evaluate_model(model, tokenizer, args.model_id, 'boolq,piqa', limit=200)
-
+    evaluate_model(model, tokenizer, args.model_id, 'llmqat', limit=200, eval_ppl=True)
 
 
 
@@ -281,11 +222,23 @@ def main(args):
             if isinstance(module, nn.Linear):
                 ordered_name_modules.append((name, module))
     elif args.granularity == "whole_model":
-        # ordered_name_modules = {name: module for name, module in model.named_modules()}
         ordered_name_modules = [("whole_model", model)]
+        # ordered_name_modules = [('whole_model', _) for i, _ in enumerate(model.base_model.layers) if i != 0 and i != 25]
+        # print(ordered_name_modules)
     else:
         raise NotImplementedError
+
+    # initial_state_dict = copy.deepcopy(model.state_dict())
+
     iterative_train(model, ordered_name_modules, data, tokenizer)
+
+    # updated_state_dict = model.state_dict()
+    # for (layer_name, initial_param), (_, updated_param) in zip(initial_state_dict.items(), updated_state_dict.items()):
+    #     if not torch.equal(initial_param, updated_param):
+    #         print(f"{layer_name} has been updated.")
+    #     else:
+    #         print(f"{layer_name} has NOT been updated.")
+
 
 
 if __name__ == "__main__":
@@ -332,6 +285,7 @@ if __name__ == "__main__":
             "ir_act_outlier_column",
             "fda_act_outlier_column",
             "bireal_act_outlier_column",
+            'lowbit_quant',
         ],
     )
     parser.add_argument(
@@ -349,8 +303,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args)
-
-
-'''
-CUDA_VISIBLE_DEVICES='0' XDG_CACHE_HOME='/data/shangyuzhang/' python experiments/column_quant_frozen_outliers.py --binarization_method=xnor_outlier --model_save_dir "./checkpoints/openllama-7b-0" --granularity=whole_model --model_id=openlm-research/open_llama_7b --train_step=1000 --dataset=red_pajama
-'''
