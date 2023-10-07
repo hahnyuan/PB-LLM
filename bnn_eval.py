@@ -23,18 +23,26 @@ from utils import prepare_model_for_eval, load_bnn, generate_sample_test
 import torch.nn.functional as F
 from evaluate import evaluate_model
 
+# CUDA_VISIBLE_DEVICES=1 python bnn_eval.py --model_id huggyllama/llama-7b --checkpoint output/huggyllama_llama-7b_c4_xnor_0.9_8_-1_hessian.pt  --eval_num_fewshot 0
 
 def main(args):
     if 'openlm' in args.model_id:
         tokenizer = LlamaTokenizer.from_pretrained(args.model_id, device_map="auto")
-        model = LlamaForCausalLM.from_pretrained(args.model_id, device_map="auto")
+        # model = LlamaForCausalLM.from_pretrained(args.model_id, device_map="auto")
     else:
         tokenizer = AutoTokenizer.from_pretrained(args.model_id, device_map="auto")
-        model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
 
     bnn_meta_path = os.path.join(args.checkpoint, "meta.json")
+    config_path=os.path.join(args.checkpoint, "config.json")
     if os.path.exists(bnn_meta_path):
+        model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
         load_bnn(model, args.checkpoint)
+    elif os.path.exists(config_path):
+        model=AutoModelForCausalLM.from_pretrained(args.checkpoint, device_map="auto")
+    else:
+        model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
+        
+
 
     model = prepare_model_for_eval(model)
 

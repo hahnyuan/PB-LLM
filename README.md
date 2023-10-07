@@ -1,4 +1,4 @@
-# Binary Quantization for Large Language Models
+# PB-LLM: Partially Binarized Large Language Models
 
 This work explores network binarization, a radical form of quantization, compressing model weights to a single bit, specifically for Large Language Models (LLMs) compression. 
 Due to previous binarization methods collapsing LLMs, we propose a novel approach, Partially-Binarized LLM (PB-LLM), which can achieve extreme low-bit quantization while maintaining the linguistic reasoning capacity of quantized LLMs. 
@@ -11,28 +11,61 @@ Those explorations and the developed methodologies significantly contribute to r
 The paper is available at [arxiv](https://arxiv.org/abs/2310.00034).
 
 
-## Model support
+## Tested Models
 
 Huggingface models
 - facebook/opt-125m
 - facebook/opt-1.3b
+- facebook/opt-6.7b
 - huggyllama/llama-7b
 - huggyllama/llama-13b
-- meta-llama/Llama-2-7b-chat-hf
-- meta-llama/Llama-2-13b-chat-hf
-- openchat/openchat_v3.2
 
 ## Usage
 
 ### Enviroment Setting
 
+If you use conda, you can create a new environment and install the dependencies with the following commands:
 ```shell
 conda create -n binary_llm python=3.10 pip
+```
+
+Install the python dependencies:
+```shell
 pip install torch transformers lm_eval accelerate tensorboardX bitsandbytes sentencepiece
 ```
 Note python version must>=3.10
 
-### Training
+### PTQ (GPTQ-PB)
+
+The GPTQ-PB is implemented in the [gptq_pb](gptq_pb) folder.
+Please go to the folder and run the script with the desired arguments:
+```
+usage: run.py [-h] [--plot] [--load_quantized] [--seed SEED] [--nsamples NSAMPLES] [--percdamp PERCDAMP] [--low_frac LOW_FRAC] [--blocksize BLOCKSIZE] [--groupsize GROUPSIZE] [--salient_metric {magnitude,hessian}] [--high_bit HIGH_BIT]
+              [--minlayer MINLAYER] [--maxlayer MAXLAYER] [--quant_only QUANT_ONLY] [--invert] [--save] [--disable_gptq] [--log_wandb]
+              model {wikitext2,ptb,c4} {xnor,sign,no,2bit,4bit,prune}
+
+positional arguments:
+  model                 model to load; for example `huggyllama/llama-7b`.
+  {wikitext2,ptb,c4}    Where to extract calibration data from.
+  {xnor,sign,no,2bit,4bit,prune}
+                        quantization method; `xnor` is the method used in paper; `prune` is the method used in sparseGPTQ
+
+--low_frac LOW_FRAC   fraction of binarized weight
+--salient_metric {magnitude,hessian}    metric to measure salient weights
+```
+
+For example
+
+```shell
+cd gptq_pb
+# for llama-7b
+CUDA_VISIBLE_DEVICES=1 python run.py huggyllama/llama-7b c4 xnor --low_frac 0.5 --high_bit 8 --salient_metric hessian
+CUDA_VISIBLE_DEVICES=2 python run.py huggyllama/llama-7b c4 xnor --low_frac 0.8 --high_bit 8 --salient_metric hessian
+CUDA_VISIBLE_DEVICES=3 python run.py huggyllama/llama-7b c4 xnor --low_frac 0.9 --high_bit 8 --salient_metric hessian
+CUDA_VISIBLE_DEVICES=0 python run.py huggyllama/llama-7b c4 xnor --low_frac 0.95 --high_bit 8 --salient_metric hessian
+```
+
+### QAT
 
 Run the script with the desired arguments:
 

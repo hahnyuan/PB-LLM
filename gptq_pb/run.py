@@ -8,38 +8,6 @@ from high_quant import HighQuantizer
 from low_quant import LowQuantizer
 from modelutils import find_layers
 
-# python opt.py huggyllama/llama-7b c4 xnor --low_frac 0.5 --high_bit 8 --plot
-# python opt.py facebook/opt-125m c4 xnor --low_frac 0.5 --high_bit 8 --plot
-# python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8
-# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8
-# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8
-# python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8
-
-# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8
-# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8
-# CUDA_VISIBLE_DEVICES=2 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8
-# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8
-
-# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8  --salient_metric hessian
-# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8 --salient_metric hessian
-# CUDA_VISIBLE_DEVICES=2 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8 --salient_metric hessian
-# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8 --salient_metric hessian
-
-# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8  --salient_metric hessian --groupsize 128
-# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8 --salient_metric hessian --groupsize 128
-# CUDA_VISIBLE_DEVICES=2 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8 --salient_metric hessian --groupsize 128
-# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8 --salient_metric hessian --groupsize 128
-
-# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8  --groupsize 128
-# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8 --groupsize 128
-# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8 --groupsize 128
-# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8 --groupsize 128
-
-# CUDA_VISIBLE_DEVICES=0 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.5 --high_bit 8 --disable_gptq
-# CUDA_VISIBLE_DEVICES=1 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.8 --high_bit 8 --disable_gptq
-# CUDA_VISIBLE_DEVICES=2 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.9 --high_bit 8 --disable_gptq
-# CUDA_VISIBLE_DEVICES=3 python opt.py facebook/opt-1.3b c4 xnor --low_frac 0.95 --high_bit 8 --disable_gptq
-
 def get_model(model):
     import torch
     def skip(*args, **kwargs):
@@ -187,7 +155,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         'model', type=str, 
-        help='OPT model to load; pass `facebook/opt-125m`.'
+        help='model to load; for example `huggyllama/llama-7b`.'
     )
     parser.add_argument(
         'dataset', type=str, choices=['wikitext2', 'ptb', 'c4'],
@@ -195,9 +163,11 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         'low_quant_method',
-        type=str, choices=['xnor', 'sign', 'no',"2bit","4bit","prune"],
+        type=str, choices=['xnor', 'sign', 'no',"2bit","4bit","prune"], help="quantization method; `xnor` is the method used in paper; `prune` is the method used in sparseGPTQ"
     )
     parser.add_argument("--plot",action="store_true")
+    parser.add_argument("--load_quantized",action="store_true"
+                        )
     parser.add_argument(
         '--seed',
         type=int, default=0, help='Seed for sampling the calibration data.'
@@ -225,7 +195,6 @@ if __name__ == '__main__':
     parser.add_argument("--salient_metric", type=str, default="magnitude", choices=["magnitude","hessian"])
     parser.add_argument(
         '--high_bit', type=int, default=8,
-        help='Whether to quantize as well.'
     )
     parser.add_argument(
         '--minlayer', type=int, default=-1,
@@ -244,8 +213,7 @@ if __name__ == '__main__':
        help='Invert subset.'
     )
     parser.add_argument(
-       '--save', type=str, default='',
-       help='Path to saved model.'
+       '--save', action='store_true',
     )
     parser.add_argument(
        '--disable_gptq', action="store_true",
@@ -257,16 +225,19 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-
-    model = get_model(args.model)
-    model.eval()
-
-    dataloader, testloader = get_loaders(
-        args.dataset, nsamples=args.nsamples, seed=args.seed, model=args.model, seqlen=model.seqlen
-    )
     device="cuda:0"
-    if args.low_frac:
+    save_title=f"{args.model}_{args.dataset}_{args.low_quant_method}_{args.low_frac}_{args.high_bit}_{args.groupsize}_{args.salient_metric}"
+    save_file="../output/"+save_title.replace("/","_")+".pt"
+    if args.load_quantized:
+        model = get_model(save_file)
+        model.eval()
+    elif args.low_frac:
+        model = get_model(args.model)
+        model.eval()
         tick = time.time()
+        dataloader, testloader = get_loaders(
+            args.dataset, nsamples=args.nsamples, seed=args.seed, model=args.model, seqlen=model.seqlen
+        )
         quant_sequential(model, dataloader, device)
         for n, p in model.named_parameters():
             print(n, torch.mean((p == 0).float()))
@@ -274,8 +245,9 @@ if __name__ == '__main__':
                 break
         print(time.time() - tick)
 
-    # for dataset in ['wikitext2', 'ptb', 'c4']:
-    for dataset in ['c4']:
+
+    for dataset in ['wikitext2', 'ptb', 'c4']:
+    # for dataset in ['c4']:
     # for dataset in ['wikitext2']:
         dataloader, testloader = get_loaders(
             dataset, seed=args.seed, model=args.model, seqlen=model.seqlen
@@ -288,9 +260,8 @@ if __name__ == '__main__':
             from eval_ppl_utils import llama_eval
             llama_eval(model, testloader, device, dataset, args.log_wandb)
 
-    save_title=f"{args.model}_{args.dataset}_{args.low_quant_method}_{args.low_frac}_{args.high_bit}_{args.groupsize}_{args.salient_metric}"
-    save_file="../output/"+save_title.replace("/","_")+".pt"
-    save_path=os.path.dirname(save_file)
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-    model.save_pretrained(save_file)
+    if args.save:
+        save_path=os.path.dirname(save_file)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        model.save_pretrained(save_file)
