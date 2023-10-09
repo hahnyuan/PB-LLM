@@ -1,5 +1,5 @@
 # PB-LLM: Partially Binarized Large Language Models    
-**[Yuzhang Shang*](https://42shawn.github.io/), [Zhihang Yuan*](http://hahnyuan.com/), Qiang Wu, [Zhen Dong](https://dong-zhen.com/)** （* Equal Contribution）     
+**[Yuzhang Shang*](https://42shawn.github.io/), [Zhihang Yuan*](http://hahnyuan.com/), Qiang Wu, [Zhen Dong](https://dong-zhen.com/)** (* Equal Contribution)     
 
 This work explores network binarization, a radical form of quantization, compressing model weights to a single bit, specifically for Large Language Models (LLMs) compression. 
 Due to previous binarization methods collapsing LLMs, we propose a novel approach, Partially-Binarized LLM (PB-LLM), which can achieve extreme low-bit quantization while maintaining the linguistic reasoning capacity of quantized LLMs. 
