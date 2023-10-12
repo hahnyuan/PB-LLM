@@ -23,7 +23,7 @@ Huggingface models
 
 ## Usage
 
-### Enviroment Setting
+### Environment Setting
 
 If you use conda, you can create a new environment and install the dependencies with the following commands:
 ```shell
