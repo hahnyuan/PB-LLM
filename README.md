@@ -84,6 +84,7 @@ CUDA_VISIBLE_DEVICES='1' python qat/run_qat.py --binarization_method=xnor_outlie
 # Evaluate
 CUDA_VISIBLE_DEVICES='1' python qat/eval_after_qat.py outputs/facebook/opt-1.3b/xnor_outlier_0.1_10000 --model_id=facebook/opt-1.3b
 
+# hessian based outlier
 CUDA_VISIBLE_DEVICES='2' python qat/run_qat.py --binarization_method=xnor_outlier_hessian --model_id=facebook/opt-1.3b --train_step=2000 --dataset=red_pajama --outlier_fraction 0.1
 
 

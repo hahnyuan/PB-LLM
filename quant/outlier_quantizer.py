@@ -23,7 +23,9 @@ def weight_quant_8bit(w):
 
 
 class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
-    def __init__(self, weight, bias, outlier_fraction, outlier_scale=1) -> None:
+    def __init__(
+        self, weight, bias, outlier_fraction, outlier_scale=1, train_outlier=False
+    ) -> None:
         super().__init__()
         self.weight = nn.Parameter(weight.data)
         if bias is not None:
@@ -35,6 +37,7 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
         self.outlier_scale = outlier_scale
         self.outlier_fraction = outlier_fraction
         self.binary_scale = None
+        self.train_outlier = train_outlier
 
         self.global_name = None
 
@@ -111,6 +114,8 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
             )
         scaled_weight = self.weight * self.outlier_scale
         binary_weight = STEBinary().apply(self.weight) * self.binary_scale
+        if not self.train_outlier:
+            scaled_weight = scaled_weight.detach()
         w_sim = torch.where(self.outlier_mask, scaled_weight, binary_weight)
         return w_sim
 
@@ -140,5 +145,9 @@ class BinaryXnorExceptOutliersLinearHessian(BinaryXnorExceptOutliersLinear):
             mask = torch.load(
                 f"gptq_pb/outputs/mask/mask_{low_frac}_{self.global_name.replace('/','_')}.pkl"
             )
-            self.outlier_mask = ~mask
+
+            self.outlier_mask = ~mask.to(w.device)
+            print(
+                f"load mask, outlier_fraction: {self.outlier_mask.sum()}/{self.outlier_mask.numel()}({self.outlier_mask.sum()/self.outlier_mask.numel()})"
+            )
             self.weight.data = weight_quant_8bit(w)
