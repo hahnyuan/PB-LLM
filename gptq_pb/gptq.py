@@ -1,6 +1,6 @@
 import math
 import time
-
+import os
 import torch
 import torch.nn as nn
 import transformers
@@ -106,6 +106,8 @@ class LowHighGPT:
             # self.low_quantizer.calibrate(W[:,st:ed],mask[:,st:ed],groupi=groupi)
 
         if OUTPUTMASK:
+            if os.path.exists("./outputs/mask") == False:
+                os.mkdir("./outputs/mask")
             torch.save(
                 mask,
                 f"./outputs/mask/mask_{low_frac}_{self.layer.global_name.replace('/','_')}.pkl",

@@ -23,7 +23,7 @@ def weight_quant_8bit(w):
 
 
 class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
-    def __init__(self, weight, bias, outlier_scale=1) -> None:
+    def __init__(self, weight, bias, outlier_fraction, outlier_scale=1) -> None:
         super().__init__()
         self.weight = nn.Parameter(weight.data)
         if bias is not None:
@@ -33,18 +33,44 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
         self.printed = False
         self.outlier_mask = None
         self.outlier_scale = outlier_scale
+        self.outlier_fraction = outlier_fraction
         self.binary_scale = None
+
+        self.global_name = None
 
     def gen_outlier_mask(self):
         with torch.no_grad():
             w = self.weight
             w_flat = w.view(-1)
-            # lower_threshold, upper_threshold = torch.quantile(w_flat, torch.tensor([0.01, 0.99]).to(w.device))
+            # lower_threshold, upper_threshold = torch.quantile(
+            #     w_flat,
+            #     torch.tensor(
+            #         [self.outlier_fraction / 2, 1 - self.outlier_fraction / 2]
+            #     ).to(w.device),
+            # )
+            # quantile() input tensor is too large
+            lower_threshold, upper_threshold = (
+                torch.kthvalue(
+                    w_flat,
+                    int(w_flat.numel() * self.outlier_fraction / 2),
+                )[0],
+                torch.kthvalue(
+                    w_flat,
+                    int(w_flat.numel() * (1 - self.outlier_fraction / 2)),
+                )[0],
+            )
+            # lower_threshold, upper_threshold = torch.kthvalue(
+            #     w_flat,
+            #     int(w_flat.numel() * self.outlier_fraction / 2),
+            # )[0], torch.kthvalue(
+            #     w_flat,
+            #     int(w_flat.numel() * (1 - self.outlier_fraction / 2)),
+            # )[0]
 
-            mean = torch.mean(w_flat).to(w.device)
-            std = torch.std(w_flat).to(w.device)
-            lower_threshold = mean - 1.6 * std  # 1.6 : 90%, 0.67 : 50%, 1.0, 70%
-            upper_threshold = mean + 1.6 * std  # 1.95 : 95%, 2.3 : 98%,
+            # mean = torch.mean(w_flat).to(w.device)
+            # std = torch.std(w_flat).to(w.device)
+            # lower_threshold = mean - 1.6 * std  # 1.6 : 90%, 0.67 : 50%, 1.0, 70%
+            # upper_threshold = mean + 1.6 * std  # 1.95 : 95%, 2.3 : 98%,
 
             outliers = (w < lower_threshold) | (w > upper_threshold)
             print(
@@ -108,16 +134,11 @@ class BinaryXnorExceptOutliersLinearHessian(BinaryXnorExceptOutliersLinear):
     def gen_outlier_mask(self):
         with torch.no_grad():
             w = self.weight
-            w_flat = w.view(-1)
-            # lower_threshold, upper_threshold = torch.quantile(w_flat, torch.tensor([0.01, 0.99]).to(w.device))
-
-            mean = torch.mean(w_flat).to(w.device)
-            std = torch.std(w_flat).to(w.device)
-            lower_threshold = mean - 1.6 * std  # 1.6 : 90%, 0.67 : 50%, 1.0, 70%
-            upper_threshold = mean + 1.6 * std  # 1.95 : 95%, 2.3 : 98%,
-
-            outliers = (w < lower_threshold) | (w > upper_threshold)
-            print(
-                f"Generat outlier_mask, outlier_fraction: {outliers.sum()}/{outliers.numel()}({outliers.sum()/outliers.numel()})"
+            low_frac = 1 - self.outlier_fraction
+            if "lm_head" in self.global_name:
+                return super().gen_outlier_mask()
+            mask = torch.load(
+                f"gptq_pb/outputs/mask/mask_{low_frac}_{self.global_name.replace('/','_')}.pkl"
             )
-            self.outlier_mask = outliers.detach()
+            self.outlier_mask = ~mask
+            self.weight.data = weight_quant_8bit(w)

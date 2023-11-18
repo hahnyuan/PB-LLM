@@ -19,6 +19,7 @@ from datautils import get_qat_dataset
 from quant import (
     BinaryInterface,
     BinaryXnorExceptOutliersLinear,
+    BinaryXnorExceptOutliersLinearHessian,
 )
 
 from utils import (
@@ -51,13 +52,18 @@ def replace_with_qlinear(root_module):
             else:
                 father = module_name_dict[name[:ind]]
             if args.binarization_method == "xnor_outlier":
-                qlinear = BinaryXnorExceptOutliersLinear(module.weight, module.bias)
+                qlinear = BinaryXnorExceptOutliersLinear(
+                    module.weight, module.bias, args.outlier_fraction
+                )
             elif args.binarization_method == "xnor_outlier_hessian":
-                qlinear = BinaryXnorExceptOutliersLinear(module.weight, module.bias)
+                qlinear = BinaryXnorExceptOutliersLinearHessian(
+                    module.weight, module.bias, args.outlier_fraction
+                )
             else:
                 raise NotImplementedError
             setattr(father, name[ind + 1 :], qlinear)
             print(f"replace layer {name} with {qlinear}")
+            qlinear.global_name = args.model_id + name
 
 
 def to_regular_linear(root_module):
@@ -121,7 +127,7 @@ def main(args):
 
     # Save model
     model.eval()
-    save_dir = f"outputs/{args.model_id}/{args.binarization_method}_{args.outlier_fraction}_{args.train_steps}"
+    save_dir = f"outputs/{args.model_id}/{args.binarization_method}_{args.outlier_fraction}_{args.train_steps}{'hessian' if args.binarization_method == 'xnor_outlier_hessian' else ''}"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     to_regular_linear(model)
