@@ -6,12 +6,28 @@ from torch.utils.checkpoint import checkpoint
 from .quantizer import STEBinary, IrNetBinary, FdaBinary, BinaryInterface
 
 
+def weight_quant_8bit(w):
+    # per channel assymetric quantization
+    w_min = w.amin(dim=1, keepdim=True)
+    w_max = w.amax(dim=1, keepdim=True)
+    w_range = w_max - w_min
+    # align zero
+    w_zero_point = torch.round(w_min - 128 * w_range / 255)
+    # quantize
+    w_q = torch.round((w - w_zero_point) * 255 / w_range)
+    # clip
+    w_q = torch.clamp(w_q, 0, 255)
+    # dequantize
+    w_q = w_q * w_range / 255 + w_zero_point
+    return w_q
+
+
 class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
     def __init__(self, weight, bias, outlier_scale=1) -> None:
         super().__init__()
-        self.weight = nn.Parameter(weight.to(torch.float32).data)
+        self.weight = nn.Parameter(weight.data)
         if bias is not None:
-            self.bias = nn.Parameter(bias.to(torch.float32).data)
+            self.bias = nn.Parameter(bias.data)
         else:
             self.bias = None
         self.printed = False
@@ -54,6 +70,7 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
             self.binary_scale = (
                 w[~self.outlier_mask].abs().mean(-1).view(-1, 1).detach()
             )
+            self.weight.data = weight_quant_8bit(w)
 
     def binarize_except_outliers(self):
         if self.outlier_mask is None:

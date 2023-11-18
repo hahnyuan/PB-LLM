@@ -5,22 +5,16 @@ import argparse
 import os
 import torch
 import torch.nn as nn
-import copy
 
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     DataCollatorForLanguageModeling,
-    default_data_collator,
     TrainingArguments,
     Trainer,
-    LlamaTokenizer,
-    LlamaForCausalLM,
 )
-from transformers.models.opt.modeling_opt import OPTForCausalLM
 
 # from transformers import LlamaTokenizer, LlamaForCausalLM
-from datasets import load_dataset
 from datautils import get_qat_dataset
 from quant import (
     BinaryInterface,
@@ -29,11 +23,8 @@ from quant import (
 
 from utils import (
     print_trainable_parameters,
-    print_memory_usage,
     prepare_model_for_training,
-    save_bnn,
 )
-from evaluate import evaluate_model
 
 from transformers import get_cosine_with_hard_restarts_schedule_with_warmup
 
@@ -130,7 +121,7 @@ def main(args):
 
     # Save model
     model.eval()
-    save_dir = f"outputs/{args.model_id}/{args.binarization_method}_{args.outlier_fraction}_{args.train_step}"
+    save_dir = f"outputs/{args.model_id}/{args.binarization_method}_{args.outlier_fraction}_{args.train_steps}"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     to_regular_linear(model)
