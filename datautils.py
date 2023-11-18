@@ -255,3 +255,32 @@ def get_loaders(name, nsamples=128, seed=0, seqlen=2048, model="", cache_dir="")
         train = wiki_train + ptb_train + c4_train
         val = None
         return train, val
+
+
+def get_eval_loaders(name, tokenizer):
+    if "wikitext2" in name:
+        testdata = load_dataset(
+            "wikitext",
+            "wikitext-2-raw-v1",
+            split="test",
+        )
+        testenc = tokenizer("\n\n".join(testdata["text"]), return_tensors="pt")
+        return testenc
+    if "ptb" in name:
+        testdata = load_dataset(
+            "ptb_text_only",
+            "penn_treebank",
+            split="validation",
+        )
+        testenc = tokenizer("\n\n".join(testdata["sentence"]), return_tensors="pt")
+        return testenc
+    if "c4" in name:
+        testdata = load_dataset(
+            "allenai/c4",
+            "allenai--c4",
+            data_files={"validation": "en/c4-validation.00000-of-00008.json.gz"},
+            split="validation",
+        )
+        testenc = tokenizer("\n\n".join(testdata["text"]), return_tensors="pt")
+        return testenc
+    raise NotImplementedError

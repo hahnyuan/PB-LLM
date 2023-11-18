@@ -28,7 +28,7 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
             mean = torch.mean(w_flat).to(w.device)
             std = torch.std(w_flat).to(w.device)
             lower_threshold = mean - 1.6 * std  # 1.6 : 90%, 0.67 : 50%, 1.0, 70%
-            upper_threshold = mean + 1.6 * std  # 1.95 : 95%, 2.3 : 98%, 
+            upper_threshold = mean + 1.6 * std  # 1.95 : 95%, 2.3 : 98%,
 
             outliers = (w < lower_threshold) | (w > upper_threshold)
             print(
@@ -77,3 +77,30 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
         w = self.binarize_except_outliers()
         output = F.linear(x, w, self.bias)
         return output
+
+    def to_regular_linear(self):
+        w = self.binarize_except_outliers()
+        linear = nn.Linear(w.shape[1], w.shape[0], bias=self.bias is not None)
+        linear.weight.data = w
+        if self.bias is not None:
+            linear.bias.data = self.bias
+        return linear
+
+
+class BinaryXnorExceptOutliersLinearHessian(BinaryXnorExceptOutliersLinear):
+    def gen_outlier_mask(self):
+        with torch.no_grad():
+            w = self.weight
+            w_flat = w.view(-1)
+            # lower_threshold, upper_threshold = torch.quantile(w_flat, torch.tensor([0.01, 0.99]).to(w.device))
+
+            mean = torch.mean(w_flat).to(w.device)
+            std = torch.std(w_flat).to(w.device)
+            lower_threshold = mean - 1.6 * std  # 1.6 : 90%, 0.67 : 50%, 1.0, 70%
+            upper_threshold = mean + 1.6 * std  # 1.95 : 95%, 2.3 : 98%,
+
+            outliers = (w < lower_threshold) | (w > upper_threshold)
+            print(
+                f"Generat outlier_mask, outlier_fraction: {outliers.sum()}/{outliers.numel()}({outliers.sum()/outliers.numel()})"
+            )
+            self.outlier_mask = outliers.detach()

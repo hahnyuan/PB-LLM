@@ -73,8 +73,17 @@ The QAT for PB-LLM is implemented in the [experiments](experiments) folder.
 For example
 
 ```shell
+# Testing for debug
+CUDA_VISIBLE_DEVICES='0' python qat/run_qat.py --binarization_method=xnor_outlier --model_id=facebook/opt-125m --train_step=20 --dataset=red_pajama --outlier_fraction 0.1
+# Evaluate
+CUDA_VISIBLE_DEVICES='0' python qat/eval_after_qat.py outputs/facebook/opt-125m/xnor_outlier_0.1 --model_id=facebook/opt-125m
+
+
 # for opt-1.3b
-CUDA_VISIBLE_DEVICES='4,5' XDG_CACHE_HOME='/data/shangyuzhang/' python experiments/column_quant_frozen_outliers.py --binarization_method=xnor_outlier --model_save_dir "./checkpoints/opt1.3b" --granularity=whole_model --model_id=facebook/opt-1.3b --train_step=2000 --dataset=red_pajama
+CUDA_VISIBLE_DEVICES='1' python qat/run_qat.py --binarization_method=xnor_outlier --model_id=facebook/opt-1.3b --train_step=2000 --dataset=red_pajama --outlier_fraction 0.1
+# Evaluate
+CUDA_VISIBLE_DEVICES='1' python qat/eval_after_qat.py outputs/facebook/opt-1.3b/xnor_outlier_0.1 --model_id=facebook/opt-1.3b
+
 ```
 
 It will automatically evaluated on 7 zero-shot QA tasks. 
