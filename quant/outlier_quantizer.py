@@ -1,4 +1,5 @@
 import torch
+import os
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
@@ -6,20 +7,27 @@ from torch.utils.checkpoint import checkpoint
 from .quantizer import STEBinary, IrNetBinary, FdaBinary, BinaryInterface
 
 
-def weight_quant_8bit(w):
+def weight_quant_8bit(w,simulated=True):
+    raw_type=w.dtype
     # per channel assymetric quantization
-    w_min = w.amin(dim=1, keepdim=True)
-    w_max = w.amax(dim=1, keepdim=True)
-    w_range = w_max - w_min
-    # align zero
-    w_zero_point = torch.round(w_min - 128 * w_range / 255)
-    # quantize
-    w_q = torch.round((w - w_zero_point) * 255 / w_range)
+    w_range = torch.max(w, dim=-1, keepdim=True)[0] - torch.min(
+        w, dim=-1, keepdim=True
+    )[0]
+    w_range= w_range.type(torch.float32)
+    w_zero_point = torch.round(torch.min(w, dim=-1, keepdim=True)[0])
+    w_q = torch.round(
+        (w - w_zero_point) / w_range * 255
+    ).type(torch.uint8)
     # clip
     w_q = torch.clamp(w_q, 0, 255)
-    # dequantize
-    w_q = w_q * (w_range / 255) + w_zero_point
+    if simulated:
+        # dequantize
+        w_q = w_q * (w_range / 255) + w_zero_point
+        w_q=w_q.to(raw_type)
+    else:
+        w_q= w_q.type(torch.uint8)
     return w_q
+
 
 
 class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
@@ -38,20 +46,15 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
         self.outlier_fraction = outlier_fraction
         self.binary_scale = None
         self.train_outlier = train_outlier
+        self.outlier_nbits=None
 
         self.global_name = None
+
 
     def gen_outlier_mask(self):
         with torch.no_grad():
             w = self.weight
             w_flat = w.view(-1)
-            # lower_threshold, upper_threshold = torch.quantile(
-            #     w_flat,
-            #     torch.tensor(
-            #         [self.outlier_fraction / 2, 1 - self.outlier_fraction / 2]
-            #     ).to(w.device),
-            # )
-            # quantile() input tensor is too large
             lower_threshold, upper_threshold = (
                 torch.kthvalue(
                     w_flat,
@@ -62,18 +65,6 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
                     int(w_flat.numel() * (1 - self.outlier_fraction / 2)),
                 )[0],
             )
-            # lower_threshold, upper_threshold = torch.kthvalue(
-            #     w_flat,
-            #     int(w_flat.numel() * self.outlier_fraction / 2),
-            # )[0], torch.kthvalue(
-            #     w_flat,
-            #     int(w_flat.numel() * (1 - self.outlier_fraction / 2)),
-            # )[0]
-
-            # mean = torch.mean(w_flat).to(w.device)
-            # std = torch.std(w_flat).to(w.device)
-            # lower_threshold = mean - 1.6 * std  # 1.6 : 90%, 0.67 : 50%, 1.0, 70%
-            # upper_threshold = mean + 1.6 * std  # 1.95 : 95%, 2.3 : 98%,
 
             outliers = (w < lower_threshold) | (w > upper_threshold)
 
@@ -87,11 +78,12 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
             print(
                 f"Generat outlier_mask, outlier_fraction: {outliers.sum()}/{outliers.numel()}({outliers.sum()/outliers.numel()})"
             )
+            self.calc_memory_consumption()
 
     def binarize_except_outliers(self):
         if self.outlier_mask is None:
             self.gen_outlier_mask()
-
+            
         # if self.printed is not True:
         #     print(outliers.sum()/outliers.numel())
         #     self.printed = True
@@ -120,6 +112,15 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
         if self.bias is not None:
             linear.bias.data = self.bias
         return linear
+    
+    def calc_memory_consumption(self):
+        w =weight_quant_8bit(self.weight.data,simulated=False)
+        w_outlier=w*self.outlier_mask
+
+        w2=w_outlier.to_sparse_csr()
+        outlier_nbits=(w2.col_indices().numel()*8+w2.values().shape.numel()*8+ w2.crow_indices().numel()*8)/w.numel()
+        self.outlier_nbits=outlier_nbits
+        # (w2.ccol_indices().numel()*16+w2.values().shape.numel()*8+ w2.row_indices().numel()*16)/w.numel()
 
 
 class BinaryXnorExceptOutliersLinearHessian(BinaryXnorExceptOutliersLinear):
@@ -127,7 +128,8 @@ class BinaryXnorExceptOutliersLinearHessian(BinaryXnorExceptOutliersLinear):
         with torch.no_grad():
             w = self.weight
             low_frac = 1 - self.outlier_fraction
-            if "lm_head" in self.global_name:
+            if not os.path.exists(f"gptq_pb/outputs/mask/mask_{low_frac}_{self.global_name.replace('/','_')}.pkl"):
+                print(f"generating mask for {self.global_name}, please generate it first, use magnitude instead")
                 return super().gen_outlier_mask()
             mask = torch.load(
                 f"gptq_pb/outputs/mask/mask_{low_frac}_{self.global_name.replace('/','_')}.pkl"
@@ -138,3 +140,4 @@ class BinaryXnorExceptOutliersLinearHessian(BinaryXnorExceptOutliersLinear):
                 f"load mask, outlier_fraction: {self.outlier_mask.sum()}/{self.outlier_mask.numel()}({self.outlier_mask.sum()/self.outlier_mask.numel()})"
             )
             self.weight.data = weight_quant_8bit(w)
+            self.calc_memory_consumption()

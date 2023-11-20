@@ -98,6 +98,17 @@ def main(args):
     print_trainable_parameters(model)
     replace_with_qlinear(model)
 
+    # Print mean bit width
+    tot_bit=0
+    tot_params=0
+    for name, module in model.named_modules():
+        if isinstance(module, BinaryInterface):
+            module.gen_outlier_mask()
+            # print(module.outlier_nbits)
+            tot_bit+=(module.outlier_nbits+1)*module.weight.numel()
+            tot_params+=module.weight.numel()
+    print(f"mean_bit: {tot_bit/tot_params} frac: {tot_bit/tot_params/16}")
+
     # Define training arguments
     training_args = TrainingArguments(
         per_device_train_batch_size=2,

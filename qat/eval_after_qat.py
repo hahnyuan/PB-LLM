@@ -14,18 +14,22 @@ def main(args):
         args.path, device_map="auto", torch_dtype=torch.float16
     )
     # Quick evaluate
-    result = evaluate_model(model, tokenizer, args.model_id, "piqa,boolq", limit=100)
-    boolq = result["boolq"]["acc"]
-    piqa = result["piqa"]["acc"]
-    print(f"boolq: {boolq:.4f}, piqa: {piqa:.4f}, avg: {(boolq+piqa)/2:.4f}")
-
     evaluate_model(
         model,
         tokenizer,
         args.model_id,
-        "llmqat",
+        "boolq,piqa",
         limit=200,
         eval_ppl="wikitext2,ptb,c4",
+    )
+    # MMLU evaluate
+    evaluate_model(
+        model,
+        tokenizer,
+        args.model_id,
+        "mmlu",
+        limit=-1,
+        eval_ppl="",
     )
 
 
