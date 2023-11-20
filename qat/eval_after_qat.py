@@ -13,8 +13,6 @@ def main(args):
     model = AutoModelForCausalLM.from_pretrained(
         args.path, device_map="auto", torch_dtype=torch.float16
     )
-    breakpoint()
-
     # Quick evaluate
     result = evaluate_model(model, tokenizer, args.model_id, "piqa,boolq", limit=100)
     boolq = result["boolq"]["acc"]
