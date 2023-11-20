@@ -85,6 +85,7 @@ def main(args):
     model = AutoModelForCausalLM.from_pretrained(
         args.model_id, device_map="auto", torch_dtype=torch.float16
     )
+    # model=model.to_bettertransformer()
 
     model = prepare_model_for_training(model)
     tokenizer.pad_token = tokenizer.eos_token
@@ -99,8 +100,8 @@ def main(args):
 
     # Define training arguments
     training_args = TrainingArguments(
-        per_device_train_batch_size=1,
-        gradient_accumulation_steps=1,
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=4,
         warmup_steps=args.train_steps * 0.05,
         max_steps=args.train_steps,
         learning_rate=1e-4,
@@ -127,7 +128,7 @@ def main(args):
 
     # Save model
     model.eval()
-    save_dir = f"outputs/{args.model_id}/{args.binarization_method}_{args.outlier_fraction}_{args.train_steps}{'hessian' if args.binarization_method == 'xnor_outlier_hessian' else ''}"
+    save_dir = f"outputs/{args.model_id}/{args.binarization_method}_{args.outlier_fraction}_{args.train_steps}"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     to_regular_linear(model)

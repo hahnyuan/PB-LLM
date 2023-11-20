@@ -13,9 +13,9 @@ def main(args):
     model = AutoModelForCausalLM.from_pretrained(
         args.path, device_map="auto", torch_dtype=torch.float16
     )
+    breakpoint()
 
     # Quick evaluate
-    model.to("cuda:0")
     result = evaluate_model(model, tokenizer, args.model_id, "piqa,boolq", limit=100)
     boolq = result["boolq"]["acc"]
     piqa = result["piqa"]["acc"]

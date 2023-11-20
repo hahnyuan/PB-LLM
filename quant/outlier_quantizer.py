@@ -18,7 +18,7 @@ def weight_quant_8bit(w):
     # clip
     w_q = torch.clamp(w_q, 0, 255)
     # dequantize
-    w_q = w_q * w_range / 255 + w_zero_point
+    w_q = w_q * (w_range / 255) + w_zero_point
     return w_q
 
 
@@ -76,30 +76,17 @@ class BinaryXnorExceptOutliersLinear(nn.Module, BinaryInterface):
             # upper_threshold = mean + 1.6 * std  # 1.95 : 95%, 2.3 : 98%,
 
             outliers = (w < lower_threshold) | (w > upper_threshold)
-            print(
-                f"Generat outlier_mask, outlier_fraction: {outliers.sum()}/{outliers.numel()}({outliers.sum()/outliers.numel()})"
-            )
+
             self.outlier_mask = outliers.detach()
-
-            # import matplotlib.pyplot as plt
-            # import numpy as np
-
-            # # Assuming you have run your provided code and obtained the outliers tensor
-            # # Convert the tensor to numpy for visualization
-            # outliers_np = outliers.cpu().numpy()
-            # outliers_np = outliers_np[0:255,0:255]
-
-            # plt.figure(figsize=(10, 10))
-            # plt.imshow(outliers_np, cmap='hot', interpolation='nearest')
-            # plt.colorbar()
-            # plt.title('Outliers Matrix Visualization')
-            # plt.savefig('./111.pdf')
-            # # plt.show()
-
             self.binary_scale = (
                 w[~self.outlier_mask].abs().mean(-1).view(-1, 1).detach()
             )
             self.weight.data = weight_quant_8bit(w)
+            weight_unique = torch.unique(self.weight)
+            print(f"n weight_unique: {weight_unique.numel()}")
+            print(
+                f"Generat outlier_mask, outlier_fraction: {outliers.sum()}/{outliers.numel()}({outliers.sum()/outliers.numel()})"
+            )
 
     def binarize_except_outliers(self):
         if self.outlier_mask is None:
